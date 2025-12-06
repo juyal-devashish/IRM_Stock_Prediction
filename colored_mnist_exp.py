@@ -67,6 +67,37 @@ def gradients_nll(X, y, Z, H, F, W, V):
     
     return dL_dW, dL_dV
 
+def gradients_nll_ensemble_env(X, y, Z_env, H_env, ensemble_logits, W_env, V_env, num_envs):
+    B = X.shape[0]
+
+    if ensemble_logits.ndim > 1: # Vector of logits must be flat
+        g = ensemble_logits[:, 0]
+    else:
+        g = ensemble_logits
+
+    sig = sigmoid(g)
+
+    dL_dg = (sig - y)[:, None]
+    dL_dF_env = (1.0/num_envs)*dL_dg
+
+    dL_dV = (dL_dF_env.T @ H_env) / B
+    dL_dH = dL_dF_env @ V_env
+    dL_dZ = dL_dH * relu_grad(Z_env)
+    dL_dW = (dL_dZ.T @ X) / B
+
+    return dL_dW, dL_dV
+
+def ensemble_logits_on_env(X_env, W_list, V_list):
+    num_envs = W_list.shape[0]
+    B = X_env.shape[0]
+    logits_sum = np.zeros(B, dtype=np.float32)
+
+    for e in range(num_envs):
+        Z_e, H_e, F_e = forward(X_env, W_list[e], V_list[e])
+        logits_sum += F_e[:, 0]
+    return logits_sum / float(num_envs)
+
+
 
 def make_environment(images, labels, e):
     images = images.reshape(-1, 28, 28)[:, ::2, ::2]
@@ -298,6 +329,136 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
     return final_train_accs, final_test_accs
 
+def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
+                   n_restarts=10, steps=501):
+    
+    final_train_accs = []
+    final_test_accs = []
+
+    for restart in range(n_restarts):
+        print(f"Restart {restart}")
+
+        # Load MNIST
+        mnist = datasets.MNIST('~/datasets/mnist', train=True, download=True)
+        mnist_train = (mnist.data[:50000].numpy(), mnist.targets[:50000].numpy())
+        mnist_val = (mnist.data[50000:].numpy(), mnist.targets[50000:].numpy())
+
+        rng_state = np.random.get_state()
+        np.random.shuffle(mnist_train[0])
+        np.random.set_state(rng_state)
+        np.random.shuffle(mnist_train[1])
+
+        envs = [
+            make_environment(mnist_train[0][::2], mnist_train[1][::2], 0.2),
+            make_environment(mnist_train[0][1::2], mnist_train[1][1::2], 0.1),
+            make_environment(mnist_val[0], mnist_val[1], 0.9)
+        ]
+
+        d = 2 * 14 * 14
+        h = hidden_dim
+        num_train_envs = 2
+
+        limit_W = np.sqrt(6.0 / (d + h))
+        W = np.random.uniform(-limit_W, limit_W, (num_train_envs, h, d)).astype(np.float32)
+
+        limit_V = np.sqrt(6.0 / (h + 1))
+        V = np.random.uniform(-limit_V, limit_V, (num_train_envs, 1, h)).astype(np.float32)
+
+        m_W = np.zeros_like(W)
+        m_V = np.zeros_like(V)
+        v_W = np.zeros_like(W)
+        v_V = np.zeros_like(V)
+        beta1 = 0.9
+        beta2 = 0.999
+        eps = 1e-8
+
+        print("step         train nll    train acc    train penalty test acc")
+
+        for step in range(steps):
+            env_nlls = []
+            env_accs = []
+            env_penalties = []
+
+            for env_idx in range(3):
+                X_env, y_env = envs[env_idx]
+                logits_env = ensemble_logits_on_env(X_env, W, V)
+
+                nll = mean_nll(logits_env, y_env)
+                acc = mean_accuracy(logits_env, y_env)
+                pen = penalty(logits_env, y_env)
+
+                env_nlls.append(nll)
+                env_accs.append(acc)
+                env_penalties.append(pen)
+
+            train_nll = np.mean([env_nlls[0], env_nlls[1]])
+            train_acc = np.mean([env_accs[0], env_accs[1]])
+            train_penalty = np.mean([env_penalties[0], env_penalties[1]])
+            test_acc = env_accs[2]
+
+            total_grad_W = np.zeros_like(W)
+            total_grad_V = np.zeros_like(V)
+
+            env_idx = step % num_train_envs
+            X_env, y_env = envs[env_idx]
+
+            B = X_env.shape[0]
+            logits_sum = np.zeros(B, dtype=np.float32)
+            Z_env = None
+            H_env = None
+
+            # Build ensemble logits on this env, track Z,H for env_idx
+            for e in range(num_train_envs):
+                if e == env_idx:
+                    Z_env, H_env, F_env = forward(X_env, W[e], V[e])
+                    logits_sum += F_env[:, 0]
+                else:
+                    _, _, F_other = forward(X_env, W[e], V[e])
+                    logits_sum += F_other[:, 0]
+
+            ensemble_logits_env = logits_sum / float(num_train_envs)
+
+            dW_env, dV_env = gradients_nll_ensemble_env(
+                X_env, y_env, Z_env, H_env, ensemble_logits_env,
+                W[env_idx], V[env_idx], num_train_envs
+            )
+
+            dW_env += l2_regularizer_weight * 2 * W[env_idx]
+            dV_env += l2_regularizer_weight * 2 * V[env_idx]
+
+            total_grad_W[env_idx] = dW_env
+            total_grad_V[env_idx] = dV_env
+
+            m_W = beta1 * m_W + (1 - beta1) * total_grad_W
+            m_V = beta1 * m_V + (1 - beta1) * total_grad_V
+            v_W = beta2 * v_W + (1 - beta2) * (total_grad_W ** 2)
+            v_V = beta2 * v_V + (1 - beta2) * (total_grad_V ** 2)
+
+            m_W_hat = m_W / (1 - beta1 ** (step + 1))
+            m_V_hat = m_V / (1 - beta1 ** (step + 1))
+            v_W_hat = v_W / (1 - beta2 ** (step + 1))
+            v_V_hat = v_V / (1 - beta2 ** (step + 1))
+
+            # Only update current env parameters
+            W[env_idx] -= lr * m_W_hat[env_idx] / (np.sqrt(v_W_hat[env_idx]) + eps)
+            V[env_idx] -= lr * m_V_hat[env_idx] / (np.sqrt(v_V_hat[env_idx]) + eps)
+
+            if step % 100 == 0:
+                print(f"{step:<12} {train_nll:<12.5f} {train_acc:<12.5f} "
+                      f"{train_penalty:<13.5f} {test_acc:<12.5f}")
+
+        final_train_accs.append(train_acc)
+        final_test_accs.append(test_acc)
+
+        print(f"Final train acc (mean/std across restarts so far):")
+        print(f"{np.mean(final_train_accs):.5f} {np.std(final_train_accs):.5f}")
+        print(f"Final test acc (mean/std across restarts so far):")
+        print(f"{np.mean(final_test_accs):.5f} {np.std(final_test_accs):.5f}")
+        print()
+
+    return final_train_accs, final_test_accs
+
+
 
 if __name__ == "__main__":
     print("Coloured MNIST: ERM vs IRM")
@@ -312,7 +473,7 @@ if __name__ == "__main__":
     )
 
     print("\n Training IRM")
-
+    
     irm_train_accs, irm_test_accs = train_irm(
         hidden_dim=256,
         l2_regularizer_weight=0.001,
@@ -320,6 +481,15 @@ if __name__ == "__main__":
         n_restarts=10,
         penalty_anneal_iters=100,
         penalty_weight=10000.0,
+        steps=501
+    )
+    
+    print("\n Training IRM-games")
+    irm_games_train_accs, irm_games_test_accs = train_irm_game(
+        hidden_dim=256,
+        l2_regularizer_weight=0.001,
+        lr=0.001,
+        n_restarts=2,
         steps=501
     )
 
@@ -330,6 +500,10 @@ if __name__ == "__main__":
     print(f"\nIRM Results:")
     print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
     print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
+    
+    print(f"\nIRM Games Results:")
+    print(f"  Train: {np.mean(irm_games_train_accs):.1%} ± {np.std(irm_games_train_accs):.1%}")
+    print(f"  Test:  {np.mean(irm_games_test_accs):.1%} ± {np.std(irm_games_test_accs):.1%}")
     
     # Plot comparison
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
