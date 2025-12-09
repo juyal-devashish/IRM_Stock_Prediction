@@ -80,7 +80,7 @@ def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("AAPL", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -166,7 +166,7 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("AAPL", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -285,7 +285,7 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("AAPL", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -399,83 +399,131 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
     return final_train_accs, final_test_accs
 
+def train_majority(n_restarts=10):
+    final_train_accs = []
+    final_test_accs = []
+
+    for restart in range(n_restarts):
+        print(f"Restart {restart}")
+
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
+        T = len(prices)
+
+        prices_env1 = prices[: T // 3]
+        prices_env2 = prices[T // 3: 2 * T // 3]
+        prices_env3 = prices[2 * T // 3:]
+
+        envs = [
+            make_finance_environment(prices_env1, window=10, e=0.2, seed=0),
+            make_finance_environment(prices_env2, window=10, e=0.1, seed=1),
+            make_finance_environment(prices_env3, window=10, e=0.9, seed=2)
+        ]
+
+        X_train = np.vstack([envs[0][0], envs[1][0]])
+        y_train = np.hstack([envs[0][1], envs[1][1]])
+        X_test, y_test = envs[2]
+
+        maj_label = 1.0 if np.mean(y_train) >= 0.5 else 0.0
+
+        y_train_pred = np.full_like(y_train, maj_label)
+        y_test_pred = np.full_like(y_test, maj_label)
+
+        train_acc = np.mean((y_train_pred == y_train).astype(np.float32))
+        test_acc = np.mean((y_test_pred == y_test).astype(np.float32))
+
+        final_train_accs.append(train_acc)
+        final_test_accs.append(test_acc)
+
+        print(f"Train acc: {train_acc:.5f}  Test acc: {test_acc:.5f}")
+        print(f"Final train acc (mean/std across restarts so far):")
+        print(f"{np.mean(final_train_accs):.5f} {np.std(final_train_accs):.5f}")
+        print(f"Final test acc (mean/std across restarts so far):")
+        print(f"{np.mean(final_test_accs):.5f} {np.std(final_test_accs):.5f}")
+        print()
+
+    return final_train_accs, final_test_accs
+
 if __name__ == "__main__":
     print("Finance (yfinance): ERM vs IRM")
-
-    print("\n Training ERM")
-    erm_train_accs, erm_test_accs = train_erm(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=10,
-        steps=501
-    )
-
-    print("\n Training IRM")
-
-    irm_train_accs, irm_test_accs = train_irm(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=10,
-        penalty_anneal_iters=100,
-        penalty_weight=10000.0,
-        steps=501
-    )
     
-    irm_game_train_accs, irm_game_test_accs = train_irm_game(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=10,
-        steps=501
-    )
+    final_train_accs, final_test_accs = train_majority(10)
+    print(f"  Train: {np.mean(final_train_accs):.1%} ± {np.std(final_train_accs):.1%}")
+    print(f"  Test:  {np.mean(final_test_accs):.1%} ± {np.std(final_test_accs):.1%}")
+    
+    # print("\n Training ERM")
+    # erm_train_accs, erm_test_accs = train_erm(
+    #     hidden_dim=256,
+    #     l2_regularizer_weight=0.001,
+    #     lr=0.001,
+    #     n_restarts=10,
+    #     steps=501
+    # )
 
-    print(f"\nERM Results:")
-    print(f"  Train: {np.mean(erm_train_accs):.1%} ± {np.std(erm_train_accs):.1%}")
-    print(f"  Test:  {np.mean(erm_test_accs):.1%} ± {np.std(erm_test_accs):.1%}")
+    # print("\n Training IRM")
+
+    # irm_train_accs, irm_test_accs = train_irm(
+    #     hidden_dim=256,
+    #     l2_regularizer_weight=0.001,
+    #     lr=0.001,
+    #     n_restarts=10,
+    #     penalty_anneal_iters=100,
+    #     penalty_weight=10000.0,
+    #     steps=501
+    # )
     
-    print(f"\nIRM Results:")
-    print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
-    print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
+    # irm_game_train_accs, irm_game_test_accs = train_irm_game(
+    #     hidden_dim=256,
+    #     l2_regularizer_weight=0.001,
+    #     lr=0.001,
+    #     n_restarts=10,
+    #     steps=501
+    # )
+
+    # print(f"\nERM Results:")
+    # print(f"  Train: {np.mean(erm_train_accs):.1%} ± {np.std(erm_train_accs):.1%}")
+    # print(f"  Test:  {np.mean(erm_test_accs):.1%} ± {np.std(erm_test_accs):.1%}")
     
-    print(f"\nIRM Games Results:")
-    print(f"  Train: {np.mean(irm_game_train_accs):.1%} ± {np.std(irm_game_train_accs):.1%}")
-    print(f"  Test:  {np.mean(irm_game_test_accs):.1%} ± {np.std(irm_game_test_accs):.1%}")
+    # print(f"\nIRM Results:")
+    # print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
+    # print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
+    
+    # print(f"\nIRM Games Results:")
+    # print(f"  Train: {np.mean(irm_game_train_accs):.1%} ± {np.std(irm_game_train_accs):.1%}")
+    # print(f"  Test:  {np.mean(irm_game_test_accs):.1%} ± {np.std(irm_game_test_accs):.1%}")
     
     # Plot comparison
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     
-    methods = ['ERM', 'IRM']
-    train_means = [np.mean(erm_train_accs), np.mean(irm_train_accs)]
-    test_means = [np.mean(erm_test_accs), np.mean(irm_test_accs)]
-    train_stds = [np.std(erm_train_accs), np.std(irm_train_accs)]
-    test_stds = [np.std(erm_test_accs), np.std(irm_test_accs)]
+    # methods = ['ERM', 'IRM']
+    # train_means = [np.mean(erm_train_accs), np.mean(irm_train_accs)]
+    # test_means = [np.mean(erm_test_accs), np.mean(irm_test_accs)]
+    # train_stds = [np.std(erm_train_accs), np.std(irm_train_accs)]
+    # test_stds = [np.std(erm_test_accs), np.std(irm_test_accs)]
     
-    x = np.arange(len(methods))
-    width = 0.35
+    # x = np.arange(len(methods))
+    # width = 0.35
     
-    ax1.bar(x - width/2, train_means, width, yerr=train_stds, label='Train', capsize=5)
-    ax1.bar(x + width/2, test_means, width, yerr=test_stds, label='Test', capsize=5)
-    ax1.set_ylabel('Accuracy')
-    ax1.set_title('ERM vs IRM: Train and Test Accuracy')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(methods)
-    ax1.legend()
-    ax1.set_ylim([0, 1])
-    ax1.grid(axis='y', alpha=0.3)
+    # ax1.bar(x - width/2, train_means, width, yerr=train_stds, label='Train', capsize=5)
+    # ax1.bar(x + width/2, test_means, width, yerr=test_stds, label='Test', capsize=5)
+    # ax1.set_ylabel('Accuracy')
+    # ax1.set_title('ERM vs IRM: Train and Test Accuracy')
+    # ax1.set_xticks(x)
+    # ax1.set_xticklabels(methods)
+    # ax1.legend()
+    # ax1.set_ylim([0, 1])
+    # ax1.grid(axis='y', alpha=0.3)
     
-    erm_gap = np.mean(erm_train_accs) - np.mean(erm_test_accs)
-    irm_gap = np.mean(irm_train_accs) - np.mean(irm_test_accs)
+    # erm_gap = np.mean(erm_train_accs) - np.mean(erm_test_accs)
+    # irm_gap = np.mean(irm_train_accs) - np.mean(irm_test_accs)
     
-    ax2.bar(methods, [erm_gap, irm_gap], color=['red', 'green'])
-    ax2.set_ylabel('Train - Test Accuracy')
-    ax2.set_title('Generalization Gap')
-    ax2.grid(axis='y', alpha=0.3)
-    ax2.axhline(y=0, color='black', linestyle='--', linewidth=0.5)
+    # ax2.bar(methods, [erm_gap, irm_gap], color=['red', 'green'])
+    # ax2.set_ylabel('Train - Test Accuracy')
+    # ax2.set_title('Generalization Gap')
+    # ax2.grid(axis='y', alpha=0.3)
+    # ax2.axhline(y=0, color='black', linestyle='--', linewidth=0.5)
     
-    plt.tight_layout()
-    plt.savefig('erm_vs_irm_comparison.png', dpi=150, bbox_inches='tight')
+    # plt.tight_layout()
+    # plt.savefig('erm_vs_irm_comparison.png', dpi=150, bbox_inches='tight')
 
 
 
@@ -501,12 +549,12 @@ if __name__ == "__main__":
 
 
 # ### Stock price history
-# ticker = yf.Ticker("AAPL")
+# ticker = yf.Ticker("wmt")
 # data = ticker.history(period="1y")
 # print(data)
 
 # ### Downloading multiple tickers
-# df = yf.download(["AAPL", "MSFT", "GOOG"], period="6mo")
+# df = yf.download(["wmt", "MSFT", "GOOG"], period="6mo")
 # print(df)
 
 # ### Get info

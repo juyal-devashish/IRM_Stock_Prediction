@@ -102,7 +102,7 @@ def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("AAPL", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
 
         envs = make_volatility_envs(prices, window=10)
 
@@ -179,7 +179,7 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("AAPL", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
 
         envs = make_volatility_envs(prices, window=10)
 
@@ -289,7 +289,7 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("AAPL", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
 
         envs = make_volatility_envs(prices, window=10)
 

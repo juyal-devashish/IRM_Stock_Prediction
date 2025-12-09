@@ -360,7 +360,7 @@ def build_finance_envs(prices, window=10, env_mode="time_spurious", seed=0):
 
 def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, steps=501, env_mode="time_spurious",
-              ticker="AAPL"):
+              ticker="wmt"):
     final_train_accs = []
     final_test_accs = []
 
@@ -448,7 +448,7 @@ def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
 def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, penalty_anneal_iters=100, penalty_weight=10000.0,
-              steps=501, env_mode="time_spurious", ticker="AAPL"):
+              steps=501, env_mode="time_spurious", ticker="wmt"):
     final_train_accs = []
     final_test_accs = []
 
@@ -568,7 +568,7 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
 def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
                    n_restarts=10, steps=501, env_mode="time_spurious",
-                   ticker="AAPL"):
+                   ticker="wmt"):
     
     final_train_accs = []
     final_test_accs = []
@@ -696,7 +696,7 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 if __name__ == "__main__":
     # Options: "time_spurious", "spurious_strength", "factor", "trend_regimes"
     ENV_MODE = "trend_regimes"
-    # For trend regimes, SPY is a nice market index; you can change to "AAPL" etc.
+    # For trend regimes, SPY is a nice market index; you can change to "wmt" etc.
     TICKER = "SPY"
 
     print(f"Finance (yfinance): ERM vs IRM vs IRM Games [{ENV_MODE}]")
