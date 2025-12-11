@@ -61,7 +61,7 @@ def make_finance_environment(prices, window=10, e=0.2, seed=None):
 
     y = labels[window:]
 
-    flip = (rng.rand(len(y)) < 0.25).astype(np.float32)
+    flip = (rng.rand(len(y)) < 0.01).astype(np.float32)
     y_noisy = np.abs(y - flip)
 
     flip_spurious = (rng.rand(len(y_noisy)) < e).astype(np.float32)

@@ -41,7 +41,6 @@ def download_prices(ticker, start="2010-01-01", end="2024-01-01"):
 
 
 
-
 def make_finance_environment(prices, window=10, e=0.2, seed=None):
     if seed is not None:
         rng = np.random.RandomState(seed)
@@ -61,7 +60,7 @@ def make_finance_environment(prices, window=10, e=0.2, seed=None):
 
     y = labels[window:]
 
-    flip = (rng.rand(len(y)) < 0.25).astype(np.float32)
+    flip = (rng.rand(len(y)) < 0.01).astype(np.float32)
     y_noisy = np.abs(y - flip)
 
     flip_spurious = (rng.rand(len(y_noisy)) < e).astype(np.float32)
@@ -80,7 +79,7 @@ def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("aapl", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -166,7 +165,7 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("aapl", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -276,16 +275,20 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
     return final_train_accs, final_test_accs
 
-def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
-                   n_restarts=10, steps=501):
-    
+def train_irm_game(hidden_dim=256,
+                   l2_regularizer_weight=0.001,
+                   lr=0.001,
+                   n_restarts=10,
+                   steps=501,
+                   inner_steps=15):
+
     final_train_accs = []
     final_test_accs = []
 
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("aapl", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -301,14 +304,18 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
         X_env0, y_env0 = envs[0]
         d = X_env0.shape[1]
         h = hidden_dim
-        num_train_envs = 2
+        num_train_envs = 2  # env 0 and 1 are players; env 2 is test
 
+        # One classifier per *training* environment
         limit_W = np.sqrt(6.0 / (d + h))
-        W = np.random.uniform(-limit_W, limit_W, (num_train_envs, h, d)).astype(np.float32)
+        W = np.random.uniform(-limit_W, limit_W,
+                              (num_train_envs, h, d)).astype(np.float32)
 
         limit_V = np.sqrt(6.0 / (h + 1))
-        V = np.random.uniform(-limit_V, limit_V, (num_train_envs, 1, h)).astype(np.float32)
+        V = np.random.uniform(-limit_V, limit_V,
+                              (num_train_envs, 1, h)).astype(np.float32)
 
+        # Adam state (shared arrays, as you already had)
         m_W = np.zeros_like(W)
         m_V = np.zeros_like(V)
         v_W = np.zeros_like(W)
@@ -317,19 +324,24 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
         beta2 = 0.999
         eps = 1e-8
 
+        # NEW: global Adam step counter for correct bias correction
+        t = 0
+
         print("step         train nll    train acc    train penalty test acc")
 
         for step in range(steps):
+            # ---------- 1) Compute metrics (same idea as before) ----------
             env_nlls = []
             env_accs = []
             env_penalties = []
 
+            # Use the *ensemble* wav on each env (including test env)
             for env_idx in range(len(envs)):
                 X_env, y_env = envs[env_idx]
                 logits_env = ensemble_logits_on_env(X_env, W, V)
                 nll = mean_nll(logits_env, y_env)
                 acc = mean_accuracy(logits_env, y_env)
-                pen = penalty(logits_env, y_env)
+                pen = penalty(logits_env, y_env)  # just monitored, not optimized
                 env_nlls.append(nll)
                 env_accs.append(acc)
                 env_penalties.append(pen)
@@ -339,50 +351,65 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
             train_penalty = np.mean(env_penalties[:num_train_envs])
             test_acc = np.mean(env_accs[num_train_envs:])
 
-            total_grad_W = np.zeros_like(W)
-            total_grad_V = np.zeros_like(V)
+            # ---------- 2) Best-response updates with inner steps ----------
+            # For each training environment, treat others as fixed
+            for env_idx in range(num_train_envs):
+                X_env, y_env = envs[env_idx]
 
-            env_idx = step % num_train_envs
-            X_env, y_env = envs[env_idx]
+                # Take multiple Adam steps for this player = approximate best response
+                for inner in range(inner_steps):
+                    B = X_env.shape[0]
+                    logits_sum = np.zeros(B, dtype=np.float32)
 
-            B = X_env.shape[0]
-            logits_sum = np.zeros(B, dtype=np.float32)
-            Z_env = None
-            H_env = None
+                    Z_env = None
+                    H_env = None
 
-            for e in range(num_train_envs):
-                if e == env_idx:
-                    Z_env, H_env, F_env = forward(X_env, W[e], V[e])
-                    logits_sum += F_env[:, 0]
-                else:
-                    _, _, F_other = forward(X_env, W[e], V[e])
-                    logits_sum += F_other[:, 0]
+                    # Build ensemble logits for this env given current W, V
+                    for e in range(num_train_envs):
+                        if e == env_idx:
+                            Z_env, H_env, F_env = forward(X_env, W[e], V[e])
+                            logits_sum += F_env[:, 0]
+                        else:
+                            _, _, F_other = forward(X_env, W[e], V[e])
+                            logits_sum += F_other[:, 0]
 
-            ensemble_logits_env = logits_sum / float(num_train_envs)
+                    ensemble_logits_env = logits_sum / float(num_train_envs)
 
-            dW_env, dV_env = gradients_nll_ensemble_env(
-                X_env, y_env, Z_env, H_env, ensemble_logits_env,
-                W[env_idx], V[env_idx], num_train_envs
-            )
+                    # Gradient of env_idx's risk wrt its own classifier,
+                    # given the ensemble wav over all training envs.
+                    dW_env, dV_env = gradients_nll_ensemble_env(
+                        X_env, y_env,
+                        Z_env, H_env,
+                        ensemble_logits_env,
+                        W[env_idx], V[env_idx],
+                        num_train_envs
+                    )
 
-            dW_env += l2_regularizer_weight * 2 * W[env_idx]
-            dV_env += l2_regularizer_weight * 2 * V[env_idx]
+                    # L2 regularization on that env's parameters
+                    dW_env += l2_regularizer_weight * 2 * W[env_idx]
+                    dV_env += l2_regularizer_weight * 2 * V[env_idx]
 
-            total_grad_W[env_idx] = dW_env
-            total_grad_V[env_idx] = dV_env
+                    # Pack into full gradient tensors so we can reuse your Adam code
+                    total_grad_W = np.zeros_like(W)
+                    total_grad_V = np.zeros_like(V)
+                    total_grad_W[env_idx] = dW_env
+                    total_grad_V[env_idx] = dV_env
 
-            m_W = beta1 * m_W + (1 - beta1) * total_grad_W
-            m_V = beta1 * m_V + (1 - beta1) * total_grad_V
-            v_W = beta2 * v_W + (1 - beta2) * (total_grad_W ** 2)
-            v_V = beta2 * v_V + (1 - beta2) * (total_grad_V ** 2)
+                    # Adam update (same as before, but with global counter t)
+                    t += 1
+                    m_W = beta1 * m_W + (1 - beta1) * total_grad_W
+                    m_V = beta1 * m_V + (1 - beta1) * total_grad_V
+                    v_W = beta2 * v_W + (1 - beta2) * (total_grad_W ** 2)
+                    v_V = beta2 * v_V + (1 - beta2) * (total_grad_V ** 2)
 
-            m_W_hat = m_W / (1 - beta1 ** (step + 1))
-            m_V_hat = m_V / (1 - beta1 ** (step + 1))
-            v_W_hat = v_W / (1 - beta2 ** (step + 1))
-            v_V_hat = v_V / (1 - beta2 ** (step + 1))
+                    m_W_hat = m_W / (1 - beta1 ** t)
+                    m_V_hat = m_V / (1 - beta1 ** t)
+                    v_W_hat = v_W / (1 - beta2 ** t)
+                    v_V_hat = v_V / (1 - beta2 ** t)
 
-            W[env_idx] -= lr * m_W_hat[env_idx] / (np.sqrt(v_W_hat[env_idx]) + eps)
-            V[env_idx] -= lr * m_V_hat[env_idx] / (np.sqrt(v_V_hat[env_idx]) + eps)
+                    # Only update the active environment's parameters
+                    W[env_idx] -= lr * m_W_hat[env_idx] / (np.sqrt(v_W_hat[env_idx]) + eps)
+                    V[env_idx] -= lr * m_V_hat[env_idx] / (np.sqrt(v_V_hat[env_idx]) + eps)
 
             if step % 100 == 0:
                 print(f"{step:<12} {train_nll:<12.5f} {train_acc:<12.5f} "
@@ -393,6 +420,7 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
         print(f"Final train acc (mean/std across restarts so far):")
         print(f"{np.mean(final_train_accs):.5f} {np.std(final_train_accs):.5f}")
+        print(f"Final test acc (mean/std across restarts so far):")
         print(f"Final test acc (mean/std across restarts so far):")
         print(f"{np.mean(final_test_accs):.5f} {np.std(final_test_accs):.5f}")
         print()
@@ -406,7 +434,7 @@ def train_majority(n_restarts=10):
     for restart in range(n_restarts):
         print(f"Restart {restart}")
 
-        prices = download_prices("wmt", start="2010-01-01", end="2024-01-01")
+        prices = download_prices("aapl", start="2010-01-01", end="2024-01-01")
         T = len(prices)
 
         prices_env1 = prices[: T // 3]
@@ -450,46 +478,46 @@ if __name__ == "__main__":
     print(f"  Train: {np.mean(final_train_accs):.1%} ± {np.std(final_train_accs):.1%}")
     print(f"  Test:  {np.mean(final_test_accs):.1%} ± {np.std(final_test_accs):.1%}")
     
-    # print("\n Training ERM")
-    # erm_train_accs, erm_test_accs = train_erm(
-    #     hidden_dim=256,
-    #     l2_regularizer_weight=0.001,
-    #     lr=0.001,
-    #     n_restarts=10,
-    #     steps=501
-    # )
+    print("\n Training ERM")
+    erm_train_accs, erm_test_accs = train_erm(
+        hidden_dim=256,
+        l2_regularizer_weight=0.001,
+        lr=0.001,
+        n_restarts=10,
+        steps=501
+    )
 
-    # print("\n Training IRM")
+    print("\n Training IRM")
 
-    # irm_train_accs, irm_test_accs = train_irm(
-    #     hidden_dim=256,
-    #     l2_regularizer_weight=0.001,
-    #     lr=0.001,
-    #     n_restarts=10,
-    #     penalty_anneal_iters=100,
-    #     penalty_weight=10000.0,
-    #     steps=501
-    # )
+    irm_train_accs, irm_test_accs = train_irm(
+        hidden_dim=256,
+        l2_regularizer_weight=0.001,
+        lr=0.001,
+        n_restarts=10,
+        penalty_anneal_iters=100,
+        penalty_weight=10000.0,
+        steps=501
+    )
     
-    # irm_game_train_accs, irm_game_test_accs = train_irm_game(
-    #     hidden_dim=256,
-    #     l2_regularizer_weight=0.001,
-    #     lr=0.001,
-    #     n_restarts=10,
-    #     steps=501
-    # )
+    irm_game_train_accs, irm_game_test_accs = train_irm_game(
+        hidden_dim=256,
+        l2_regularizer_weight=0.001,
+        lr=0.001,
+        n_restarts=10,
+        steps=501
+    )
 
-    # print(f"\nERM Results:")
-    # print(f"  Train: {np.mean(erm_train_accs):.1%} ± {np.std(erm_train_accs):.1%}")
-    # print(f"  Test:  {np.mean(erm_test_accs):.1%} ± {np.std(erm_test_accs):.1%}")
+    print(f"\nERM Results:")
+    print(f"  Train: {np.mean(erm_train_accs):.1%} ± {np.std(erm_train_accs):.1%}")
+    print(f"  Test:  {np.mean(erm_test_accs):.1%} ± {np.std(erm_test_accs):.1%}")
     
-    # print(f"\nIRM Results:")
-    # print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
-    # print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
+    print(f"\nIRM Results:")
+    print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
+    print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
     
-    # print(f"\nIRM Games Results:")
-    # print(f"  Train: {np.mean(irm_game_train_accs):.1%} ± {np.std(irm_game_train_accs):.1%}")
-    # print(f"  Test:  {np.mean(irm_game_test_accs):.1%} ± {np.std(irm_game_test_accs):.1%}")
+    print(f"\nIRM Games Results:")
+    print(f"  Train: {np.mean(irm_game_train_accs):.1%} ± {np.std(irm_game_train_accs):.1%}")
+    print(f"  Test:  {np.mean(irm_game_test_accs):.1%} ± {np.std(irm_game_test_accs):.1%}")
     
     # Plot comparison
     # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
@@ -549,12 +577,12 @@ if __name__ == "__main__":
 
 
 # ### Stock price history
-# ticker = yf.Ticker("wmt")
+# ticker = yf.Ticker("aapl")
 # data = ticker.history(period="1y")
 # print(data)
 
 # ### Downloading multiple tickers
-# df = yf.download(["wmt", "MSFT", "GOOG"], period="6mo")
+# df = yf.download(["aapl", "MSFT", "GOOG"], period="6mo")
 # print(df)
 
 # ### Get info

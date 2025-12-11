@@ -72,7 +72,7 @@ def make_finance_environment(prices, window=10, e=0.2, seed=None):
     y = labels[window:]
 
     # label noise
-    flip = (rng.rand(len(y)) < 0.25).astype(np.float32)
+    flip = (rng.rand(len(y)) < 0.01).astype(np.float32)
     y_noisy = np.abs(y - flip)
 
     # spurious feature
@@ -106,7 +106,7 @@ def make_finance_envs_spurious_strength(
         rng = np.random
 
     if flip_prob_list is None:
-        flip_prob_list = [0.25] * len(e_list)
+        flip_prob_list = [0.01] * len(e_list)
     assert len(e_list) == len(flip_prob_list)
 
     returns = prices[1:] / prices[:-1] - 1
@@ -271,7 +271,7 @@ def make_trend_regime_envs(
     y_bear = np.array(y_bear_list, dtype=np.float32)
 
     def add_spurious(X, y, e):
-        flip = (rng.rand(len(y)) < 0.25).astype(np.float32)
+        flip = (rng.rand(len(y)) < 0.01).astype(np.float32)
         y_noisy = np.abs(y - flip)
 
         flip_spurious = (rng.rand(len(y_noisy)) < e).astype(np.float32)
@@ -360,7 +360,7 @@ def build_finance_envs(prices, window=10, env_mode="time_spurious", seed=0):
 
 def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, steps=501, env_mode="time_spurious",
-              ticker="wmt"):
+              ticker="aapl"):
     final_train_accs = []
     final_test_accs = []
 
@@ -448,7 +448,7 @@ def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
 def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, penalty_anneal_iters=100, penalty_weight=10000.0,
-              steps=501, env_mode="time_spurious", ticker="wmt"):
+              steps=501, env_mode="time_spurious", ticker="aapl"):
     final_train_accs = []
     final_test_accs = []
 
@@ -568,7 +568,7 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
 def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
                    n_restarts=10, steps=501, env_mode="time_spurious",
-                   ticker="wmt"):
+                   ticker="aapl"):
     
     final_train_accs = []
     final_test_accs = []
@@ -696,7 +696,7 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 if __name__ == "__main__":
     # Options: "time_spurious", "spurious_strength", "factor", "trend_regimes"
     ENV_MODE = "trend_regimes"
-    # For trend regimes, SPY is a nice market index; you can change to "wmt" etc.
+    # For trend regimes, SPY is a nice market index; you can change to "aapl" etc.
     TICKER = "SPY"
 
     print(f"Finance (yfinance): ERM vs IRM vs IRM Games [{ENV_MODE}]")
