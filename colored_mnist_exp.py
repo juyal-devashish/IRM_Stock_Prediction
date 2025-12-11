@@ -461,80 +461,190 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
 
 if __name__ == "__main__":
-    print("Coloured MNIST: ERM vs IRM")
+    RUN_TRAINING = True  # set to False to skip training and just load + plot
 
-    print("\n Training ERM")
-    erm_train_accs, erm_test_accs = train_erm(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=10,
-        steps=501
-    )
+    if RUN_TRAINING:
+        print("Coloured MNIST: ERM vs IRM vs IRM-Games")
 
-    print("\n Training IRM")
-    
-    irm_train_accs, irm_test_accs = train_irm(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=10,
-        penalty_anneal_iters=100,
-        penalty_weight=10000.0,
-        steps=501
-    )
-    
-    print("\n Training IRM-games")
-    irm_games_train_accs, irm_games_test_accs = train_irm_game(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=2,
-        steps=501
-    )
+        print("\n Training ERM")
+        erm_train_accs, erm_test_accs = train_erm(
+            hidden_dim=256,
+            l2_regularizer_weight=0.001,
+            lr=0.001,
+            n_restarts=10,
+            steps=501
+        )
+
+        print("\n Training IRM")
+        irm_train_accs, irm_test_accs = train_irm(
+            hidden_dim=256,
+            l2_regularizer_weight=0.001,
+            lr=0.001,
+            n_restarts=10,
+            penalty_anneal_iters=100,
+            penalty_weight=10000.0,
+            steps=501
+        )
+
+        print("\n Training IRM-games")
+        irm_games_train_accs, irm_games_test_accs = train_irm_game(
+            hidden_dim=256,
+            l2_regularizer_weight=0.001,
+            lr=0.001,
+            n_restarts=2,
+            steps=501
+        )
+
+        np.savez(
+            "results_cm.npz",
+            erm_train=erm_train_accs,
+            erm_test=erm_test_accs,
+            irm_train=irm_train_accs,
+            irm_test=irm_test_accs,
+            irmg_train=irm_games_train_accs,
+            irmg_test=irm_games_test_accs
+        )
+
+    else:
+        print("Loading saved results from results_cm.npz")
+        data = np.load("results_cm.npz")
+        erm_train_accs = data["erm_train"]
+        erm_test_accs = data["erm_test"]
+        irm_train_accs = data["irm_train"]
+        irm_test_accs = data["irm_test"]
+        irm_games_train_accs = data["irmg_train"]
+        irm_games_test_accs = data["irmg_test"]
 
     print(f"\nERM Results:")
     print(f"  Train: {np.mean(erm_train_accs):.1%} ± {np.std(erm_train_accs):.1%}")
     print(f"  Test:  {np.mean(erm_test_accs):.1%} ± {np.std(erm_test_accs):.1%}")
-    
+
     print(f"\nIRM Results:")
     print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
     print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
-    
-    print(f"\nIRM Games Results:")
+
+    print(f"\nIRM-Games Results:")
     print(f"  Train: {np.mean(irm_games_train_accs):.1%} ± {np.std(irm_games_train_accs):.1%}")
     print(f"  Test:  {np.mean(irm_games_test_accs):.1%} ± {np.std(irm_games_test_accs):.1%}")
-    
-    # Plot comparison
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-    
-    methods = ['ERM', 'IRM']
-    train_means = [np.mean(erm_train_accs), np.mean(irm_train_accs)]
-    test_means = [np.mean(erm_test_accs), np.mean(irm_test_accs)]
-    train_stds = [np.std(erm_train_accs), np.std(irm_train_accs)]
-    test_stds = [np.std(erm_test_accs), np.std(irm_test_accs)]
-    
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    methods = ['ERM', 'IRM', 'IRM-Games']
+
+    train_means = [
+        np.mean(erm_train_accs),
+        np.mean(irm_train_accs),
+        np.mean(irm_games_train_accs)
+    ]
+    test_means = [
+        np.mean(erm_test_accs),
+        np.mean(irm_test_accs),
+        np.mean(irm_games_test_accs)
+    ]
+
+    train_stds = [
+        np.std(erm_train_accs),
+        np.std(irm_train_accs),
+        np.std(irm_games_train_accs)
+    ]
+    test_stds = [
+        np.std(erm_test_accs),
+        np.std(irm_test_accs),
+        np.std(irm_games_test_accs)
+    ]
+
     x = np.arange(len(methods))
     width = 0.35
-    
-    ax1.bar(x - width/2, train_means, width, yerr=train_stds, label='Train', capsize=5)
-    ax1.bar(x + width/2, test_means, width, yerr=test_stds, label='Test', capsize=5)
-    ax1.set_ylabel('Accuracy')
-    ax1.set_title('ERM vs IRM: Train and Test Accuracy')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(methods)
-    ax1.legend()
-    ax1.set_ylim([0, 1])
-    ax1.grid(axis='y', alpha=0.3)
-    
-    erm_gap = np.mean(erm_train_accs) - np.mean(erm_test_accs)
-    irm_gap = np.mean(irm_train_accs) - np.mean(irm_test_accs)
-    
-    ax2.bar(methods, [erm_gap, irm_gap], color=['red', 'green'])
-    ax2.set_ylabel('Train - Test Accuracy')
-    ax2.set_title('Generalization Gap')
-    ax2.grid(axis='y', alpha=0.3)
-    ax2.axhline(y=0, color='black', linestyle='--', linewidth=0.5)
-    
+
+    ax.bar(x - width/2, train_means, width, yerr=train_stds, label='Train', capsize=5)
+    ax.bar(x + width/2, test_means, width, yerr=test_stds, label='Test', capsize=5)
+
+    ax.set_ylabel('Accuracy')
+    ax.set_title('ERM vs IRM vs IRM-Games: Train and Test Accuracy')
+    ax.set_xticks(x)
+    ax.set_xticklabels(methods)
+    ax.set_ylim([0, 1])
+    ax.legend()
+    ax.grid(axis='y', alpha=0.3)
+
     plt.tight_layout()
-    plt.savefig('erm_vs_irm_comparison.png', dpi=150, bbox_inches='tight')
+    plt.savefig('erm_irm_irmgames_comparison.png', dpi=150, bbox_inches='tight')
+
+    
+    # print("Coloured MNIST: ERM vs IRM")
+
+    # print("\n Training ERM")
+    # erm_train_accs, erm_test_accs = train_erm(
+    #     hidden_dim=256,
+    #     l2_regularizer_weight=0.001,
+    #     lr=0.001,
+    #     n_restarts=10,
+    #     steps=501
+    # )
+
+    # print("\n Training IRM")
+    
+    # irm_train_accs, irm_test_accs = train_irm(
+    #     hidden_dim=256,
+    #     l2_regularizer_weight=0.001,
+    #     lr=0.001,
+    #     n_restarts=10,
+    #     penalty_anneal_iters=100,
+    #     penalty_weight=10000.0,
+    #     steps=501
+    # )
+    
+    # print("\n Training IRM-games")
+    # irm_games_train_accs, irm_games_test_accs = train_irm_game(
+    #     hidden_dim=256,
+    #     l2_regularizer_weight=0.001,
+    #     lr=0.001,
+    #     n_restarts=2,
+    #     steps=501
+    # )
+
+    # print(f"\nERM Results:")
+    # print(f"  Train: {np.mean(erm_train_accs):.1%} ± {np.std(erm_train_accs):.1%}")
+    # print(f"  Test:  {np.mean(erm_test_accs):.1%} ± {np.std(erm_test_accs):.1%}")
+    
+    # print(f"\nIRM Results:")
+    # print(f"  Train: {np.mean(irm_train_accs):.1%} ± {np.std(irm_train_accs):.1%}")
+    # print(f"  Test:  {np.mean(irm_test_accs):.1%} ± {np.std(irm_test_accs):.1%}")
+    
+    # print(f"\nIRM Games Results:")
+    # print(f"  Train: {np.mean(irm_games_train_accs):.1%} ± {np.std(irm_games_train_accs):.1%}")
+    # print(f"  Test:  {np.mean(irm_games_test_accs):.1%} ± {np.std(irm_games_test_accs):.1%}")
+    
+    # # Plot comparison
+    # fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    
+    # methods = ['ERM', 'IRM']
+    # train_means = [np.mean(erm_train_accs), np.mean(irm_train_accs)]
+    # test_means = [np.mean(erm_test_accs), np.mean(irm_test_accs)]
+    # train_stds = [np.std(erm_train_accs), np.std(irm_train_accs)]
+    # test_stds = [np.std(erm_test_accs), np.std(irm_test_accs)]
+    
+    # x = np.arange(len(methods))
+    # width = 0.35
+    
+    # ax1.bar(x - width/2, train_means, width, yerr=train_stds, label='Train', capsize=5)
+    # ax1.bar(x + width/2, test_means, width, yerr=test_stds, label='Test', capsize=5)
+    # ax1.set_ylabel('Accuracy')
+    # ax1.set_title('ERM vs IRM: Train and Test Accuracy')
+    # ax1.set_xticks(x)
+    # ax1.set_xticklabels(methods)
+    # ax1.legend()
+    # ax1.set_ylim([0, 1])
+    # ax1.grid(axis='y', alpha=0.3)
+    
+    # erm_gap = np.mean(erm_train_accs) - np.mean(erm_test_accs)
+    # irm_gap = np.mean(irm_train_accs) - np.mean(irm_test_accs)
+    
+    # ax2.bar(methods, [erm_gap, irm_gap], color=['red', 'green'])
+    # ax2.set_ylabel('Train - Test Accuracy')
+    # ax2.set_title('Generalization Gap')
+    # ax2.grid(axis='y', alpha=0.3)
+    # ax2.axhline(y=0, color='black', linestyle='--', linewidth=0.5)
+    
+    # plt.tight_layout()
+    # plt.savefig('erm_vs_irm_comparison.png', dpi=150, bbox_inches='tight')
