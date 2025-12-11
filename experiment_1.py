@@ -1,5 +1,4 @@
 from util_file import *
-
 import numpy as np
 import yfinance as yf
 import matplotlib.pyplot as plt
@@ -8,7 +7,6 @@ import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
-### yfinance content below 
 
 def download_prices(ticker, start="2010-01-01", end="2024-01-01"):
     data = yf.download(ticker, start=start, end=end, group_by="column")
@@ -40,7 +38,6 @@ def download_prices(ticker, start="2010-01-01", end="2024-01-01"):
     return prices
 
 
-
 def make_finance_environment(prices, window=10, e=0.2, seed=None):
     if seed is not None:
         rng = np.random.RandomState(seed)
@@ -60,16 +57,14 @@ def make_finance_environment(prices, window=10, e=0.2, seed=None):
 
     y = labels[window:]
 
-    flip = (rng.rand(len(y)) < 0.01).astype(np.float32)
-    y_noisy = np.abs(y - flip)
-
-    flip_spurious = (rng.rand(len(y_noisy)) < e).astype(np.float32)
-    s = np.abs(y_noisy - flip_spurious)
+    flip_spurious = (rng.rand(len(y)) < e).astype(np.float32)
+    s = np.abs(y - flip_spurious)
 
     s = s[:, None]
     X_full = np.concatenate([X, s], axis=1)
 
-    return X_full, y_noisy
+    return X_full, y
+
 
 def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, steps=501):
@@ -275,15 +270,21 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
     return final_train_accs, final_test_accs
 
+
 def train_irm_game(hidden_dim=256,
                    l2_regularizer_weight=0.001,
-                   lr=0.001,
+                   lr=2.5e-4,
                    n_restarts=10,
-                   steps=501,
-                   inner_steps=15):
-
+                   steps=500,
+                   batch_size=256,
+                   warm_start=True):
+    
     final_train_accs = []
-    final_test_accs = []
+    final_test_accs  = []
+
+    beta1 = 0.9
+    beta2 = 0.999
+    eps   = 1e-8
 
     for restart in range(n_restarts):
         print(f"Restart {restart}")
@@ -301,47 +302,122 @@ def train_irm_game(hidden_dim=256,
             make_finance_environment(prices_env3, window=10, e=0.9, seed=2)
         ]
 
+        num_train_envs = 2
+
         X_env0, y_env0 = envs[0]
         d = X_env0.shape[1]
         h = hidden_dim
-        num_train_envs = 2  # env 0 and 1 are players; env 2 is test
 
-        # One classifier per *training* environment
         limit_W = np.sqrt(6.0 / (d + h))
         W = np.random.uniform(-limit_W, limit_W,
                               (num_train_envs, h, d)).astype(np.float32)
-
         limit_V = np.sqrt(6.0 / (h + 1))
         V = np.random.uniform(-limit_V, limit_V,
                               (num_train_envs, 1, h)).astype(np.float32)
 
-        # Adam state (shared arrays, as you already had)
         m_W = np.zeros_like(W)
-        m_V = np.zeros_like(V)
         v_W = np.zeros_like(W)
+        m_V = np.zeros_like(V)
         v_V = np.zeros_like(V)
-        beta1 = 0.9
-        beta2 = 0.999
-        eps = 1e-8
+        t_env = np.zeros(num_train_envs, dtype=np.int64)
+        train_envs = envs[:num_train_envs]
 
-        # NEW: global Adam step counter for correct bias correction
-        t = 0
+        # Warm Start
+        if warm_start:
+            total_train_points = sum(X.shape[0] for (X, _) in train_envs)
+            steps_warm = max(1, total_train_points // batch_size)
+
+            for ws in range(steps_warm):
+                for env_idx in range(num_train_envs):
+                    X_e, y_e = train_envs[env_idx]
+                    N_e = X_e.shape[0]
+                    bsz = min(batch_size, N_e)
+                    idx = np.random.randint(0, N_e, size=bsz)
+                    Xb = X_e[idx]
+                    yb = y_e[idx]
+
+                    Z, H, F = forward(Xb, W[env_idx], V[env_idx])
+                    dW, dV = gradients_nll(Xb, yb, Z, H, F, W[env_idx], V[env_idx])
+                    dW += 2 * l2_regularizer_weight * W[env_idx]
+                    dV += 2 * l2_regularizer_weight * V[env_idx]
+                    t_env[env_idx] += 1
+                    t = t_env[env_idx]
+
+                    m_W[env_idx] = beta1 * m_W[env_idx] + (1 - beta1) * dW
+                    v_W[env_idx] = beta2 * v_W[env_idx] + (1 - beta2) * (dW ** 2)
+                    m_V[env_idx] = beta1 * m_V[env_idx] + (1 - beta1) * dV
+                    v_V[env_idx] = beta2 * v_V[env_idx] + (1 - beta2) * (dV ** 2)
+
+                    m_W_hat = m_W[env_idx] / (1 - beta1 ** t)
+                    v_W_hat = v_W[env_idx] / (1 - beta2 ** t)
+                    m_V_hat = m_V[env_idx] / (1 - beta1 ** t)
+                    v_V_hat = v_V[env_idx] / (1 - beta2 ** t)
+
+                    W[env_idx] -= lr * m_W_hat / (np.sqrt(v_W_hat) + eps)
+                    V[env_idx] -= lr * m_V_hat / (np.sqrt(v_V_hat) + eps)
 
         print("step         train nll    train acc    train penalty test acc")
 
         for step in range(steps):
-            # ---------- 1) Compute metrics (same idea as before) ----------
+
+            for env_idx in range(num_train_envs):
+                X_e, y_e = train_envs[env_idx]
+                N_e = X_e.shape[0]
+                bsz = min(batch_size, N_e)
+                idx = np.random.randint(0, N_e, size=bsz)
+                Xb = X_e[idx]
+                yb = y_e[idx]
+
+                B = Xb.shape[0]
+                logits_sum = np.zeros(B, dtype=np.float32)
+                Z_env = None
+                H_env = None
+
+                for e in range(num_train_envs):
+                    if e == env_idx:
+                        Z_env, H_env, F_env = forward(Xb, W[e], V[e])
+                        logits_sum += F_env[:, 0]
+                    else:
+                        _, _, F_other = forward(Xb, W[e], V[e])
+                        logits_sum += F_other[:, 0]
+
+                ensemble_logits_env = logits_sum / float(num_train_envs)
+
+                dW_env, dV_env = gradients_nll_ensemble_env(
+                    Xb, yb,
+                    Z_env, H_env,
+                    ensemble_logits_env,
+                    W[env_idx], V[env_idx],
+                    num_envs=num_train_envs
+                )
+                dW_env += 2 * l2_regularizer_weight * W[env_idx]
+                dV_env += 2 * l2_regularizer_weight * V[env_idx]
+                t_env[env_idx] += 1
+                t = t_env[env_idx]
+
+                m_W[env_idx] = beta1 * m_W[env_idx] + (1 - beta1) * dW_env
+                v_W[env_idx] = beta2 * v_W[env_idx] + (1 - beta2) * (dW_env ** 2)
+                m_V[env_idx] = beta1 * m_V[env_idx] + (1 - beta1) * dV_env
+                v_V[env_idx] = beta2 * v_V[env_idx] + (1 - beta2) * (dV_env ** 2)
+
+                m_W_hat = m_W[env_idx] / (1 - beta1 ** t)
+                v_W_hat = v_W[env_idx] / (1 - beta2 ** t)
+                m_V_hat = m_V[env_idx] / (1 - beta1 ** t)
+                v_V_hat = v_V[env_idx] / (1 - beta2 ** t)
+
+                W[env_idx] -= lr * m_W_hat / (np.sqrt(v_W_hat) + eps)
+                V[env_idx] -= lr * m_V_hat / (np.sqrt(v_V_hat) + eps)
+
             env_nlls = []
             env_accs = []
             env_penalties = []
 
-            # Use the *ensemble* wav on each env (including test env)
-            for env_idx in range(len(envs)):
-                X_env, y_env = envs[env_idx]
+            for e_idx in range(len(envs)):
+                X_env, y_env = envs[e_idx]
                 logits_env = ensemble_logits_on_env(X_env, W, V)
                 nll = mean_nll(logits_env, y_env)
                 acc = mean_accuracy(logits_env, y_env)
-                pen = penalty(logits_env, y_env)  # just monitored, not optimized
+                pen = penalty(logits_env, y_env)
                 env_nlls.append(nll)
                 env_accs.append(acc)
                 env_penalties.append(pen)
@@ -349,123 +425,18 @@ def train_irm_game(hidden_dim=256,
             train_nll = np.mean(env_nlls[:num_train_envs])
             train_acc = np.mean(env_accs[:num_train_envs])
             train_penalty = np.mean(env_penalties[:num_train_envs])
-            test_acc = np.mean(env_accs[num_train_envs:])
+            test_acc = env_accs[num_train_envs]
 
-            # ---------- 2) Best-response updates with inner steps ----------
-            # For each training environment, treat others as fixed
-            for env_idx in range(num_train_envs):
-                X_env, y_env = envs[env_idx]
-
-                # Take multiple Adam steps for this player = approximate best response
-                for inner in range(inner_steps):
-                    B = X_env.shape[0]
-                    logits_sum = np.zeros(B, dtype=np.float32)
-
-                    Z_env = None
-                    H_env = None
-
-                    # Build ensemble logits for this env given current W, V
-                    for e in range(num_train_envs):
-                        if e == env_idx:
-                            Z_env, H_env, F_env = forward(X_env, W[e], V[e])
-                            logits_sum += F_env[:, 0]
-                        else:
-                            _, _, F_other = forward(X_env, W[e], V[e])
-                            logits_sum += F_other[:, 0]
-
-                    ensemble_logits_env = logits_sum / float(num_train_envs)
-
-                    # Gradient of env_idx's risk wrt its own classifier,
-                    # given the ensemble wav over all training envs.
-                    dW_env, dV_env = gradients_nll_ensemble_env(
-                        X_env, y_env,
-                        Z_env, H_env,
-                        ensemble_logits_env,
-                        W[env_idx], V[env_idx],
-                        num_train_envs
-                    )
-
-                    # L2 regularization on that env's parameters
-                    dW_env += l2_regularizer_weight * 2 * W[env_idx]
-                    dV_env += l2_regularizer_weight * 2 * V[env_idx]
-
-                    # Pack into full gradient tensors so we can reuse your Adam code
-                    total_grad_W = np.zeros_like(W)
-                    total_grad_V = np.zeros_like(V)
-                    total_grad_W[env_idx] = dW_env
-                    total_grad_V[env_idx] = dV_env
-
-                    # Adam update (same as before, but with global counter t)
-                    t += 1
-                    m_W = beta1 * m_W + (1 - beta1) * total_grad_W
-                    m_V = beta1 * m_V + (1 - beta1) * total_grad_V
-                    v_W = beta2 * v_W + (1 - beta2) * (total_grad_W ** 2)
-                    v_V = beta2 * v_V + (1 - beta2) * (total_grad_V ** 2)
-
-                    m_W_hat = m_W / (1 - beta1 ** t)
-                    m_V_hat = m_V / (1 - beta1 ** t)
-                    v_W_hat = v_W / (1 - beta2 ** t)
-                    v_V_hat = v_V / (1 - beta2 ** t)
-
-                    # Only update the active environment's parameters
-                    W[env_idx] -= lr * m_W_hat[env_idx] / (np.sqrt(v_W_hat[env_idx]) + eps)
-                    V[env_idx] -= lr * m_V_hat[env_idx] / (np.sqrt(v_V_hat[env_idx]) + eps)
-
-            if step % 100 == 0:
+            if step % 50 == 0:
                 print(f"{step:<12} {train_nll:<12.5f} {train_acc:<12.5f} "
                       f"{train_penalty:<13.5f} {test_acc:<12.5f}")
 
         final_train_accs.append(train_acc)
         final_test_accs.append(test_acc)
 
-        print(f"Final train acc (mean/std across restarts so far):")
+        print("Final train acc (mean/std across restarts so far):")
         print(f"{np.mean(final_train_accs):.5f} {np.std(final_train_accs):.5f}")
-        print(f"Final test acc (mean/std across restarts so far):")
-        print(f"Final test acc (mean/std across restarts so far):")
-        print(f"{np.mean(final_test_accs):.5f} {np.std(final_test_accs):.5f}")
-        print()
-
-    return final_train_accs, final_test_accs
-
-def train_majority(n_restarts=10):
-    final_train_accs = []
-    final_test_accs = []
-
-    for restart in range(n_restarts):
-        print(f"Restart {restart}")
-
-        prices = download_prices("aapl", start="2010-01-01", end="2024-01-01")
-        T = len(prices)
-
-        prices_env1 = prices[: T // 3]
-        prices_env2 = prices[T // 3: 2 * T // 3]
-        prices_env3 = prices[2 * T // 3:]
-
-        envs = [
-            make_finance_environment(prices_env1, window=10, e=0.2, seed=0),
-            make_finance_environment(prices_env2, window=10, e=0.1, seed=1),
-            make_finance_environment(prices_env3, window=10, e=0.9, seed=2)
-        ]
-
-        X_train = np.vstack([envs[0][0], envs[1][0]])
-        y_train = np.hstack([envs[0][1], envs[1][1]])
-        X_test, y_test = envs[2]
-
-        maj_label = 1.0 if np.mean(y_train) >= 0.5 else 0.0
-
-        y_train_pred = np.full_like(y_train, maj_label)
-        y_test_pred = np.full_like(y_test, maj_label)
-
-        train_acc = np.mean((y_train_pred == y_train).astype(np.float32))
-        test_acc = np.mean((y_test_pred == y_test).astype(np.float32))
-
-        final_train_accs.append(train_acc)
-        final_test_accs.append(test_acc)
-
-        print(f"Train acc: {train_acc:.5f}  Test acc: {test_acc:.5f}")
-        print(f"Final train acc (mean/std across restarts so far):")
-        print(f"{np.mean(final_train_accs):.5f} {np.std(final_train_accs):.5f}")
-        print(f"Final test acc (mean/std across restarts so far):")
+        print("Final test acc (mean/std across restarts so far):")
         print(f"{np.mean(final_test_accs):.5f} {np.std(final_test_accs):.5f}")
         print()
 
@@ -473,10 +444,6 @@ def train_majority(n_restarts=10):
 
 if __name__ == "__main__":
     print("Finance (yfinance): ERM vs IRM")
-    
-    final_train_accs, final_test_accs = train_majority(10)
-    print(f"  Train: {np.mean(final_train_accs):.1%} ± {np.std(final_train_accs):.1%}")
-    print(f"  Test:  {np.mean(final_test_accs):.1%} ± {np.std(final_test_accs):.1%}")
     
     print("\n Training ERM")
     erm_train_accs, erm_test_accs = train_erm(
@@ -502,9 +469,11 @@ if __name__ == "__main__":
     irm_game_train_accs, irm_game_test_accs = train_irm_game(
         hidden_dim=256,
         l2_regularizer_weight=0.001,
-        lr=0.001,
+        lr=2.5e-4,
         n_restarts=10,
-        steps=501
+        steps=500,
+        batch_size=256,
+        warm_start=True
     )
 
     print(f"\nERM Results:")
@@ -552,50 +521,3 @@ if __name__ == "__main__":
     
     # plt.tight_layout()
     # plt.savefig('erm_vs_irm_comparison.png', dpi=150, bbox_inches='tight')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ### Stock price history
-# ticker = yf.Ticker("aapl")
-# data = ticker.history(period="1y")
-# print(data)
-
-# ### Downloading multiple tickers
-# df = yf.download(["aapl", "MSFT", "GOOG"], period="6mo")
-# print(df)
-
-# ### Get info
-# ticker = yf.Ticker("TSLA")
-# print(ticker.info)            # Company info
-# print(ticker.financials)      # Income statements
-# print(ticker.balance_sheet)   # Balance sheet
-# print(ticker.cashflow)        # Cash flow
-
-
-# # 1. Frame the finance data in terms of how we want the environments setup
-
-# # First will have to look how they do it from the paper
-
-
-# # Need to do 80/10/10 data split

@@ -566,12 +566,22 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 # Training: IRM Game
 ###############################################################################
 
-def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
-                   n_restarts=10, steps=501, env_mode="time_spurious",
+def train_irm_game(hidden_dim=256, 
+                   l2_regularizer_weight=0.001, 
+                   lr=2.5e-4,
+                   n_restarts=10, 
+                   steps=500,
+                   batch_size=256,
+                   warm_start=True,
+                   env_mode="time_spurious",
                    ticker="aapl"):
     
     final_train_accs = []
     final_test_accs = []
+    
+    beta1 = 0.9
+    beta2 = 0.999
+    eps   = 1e-8
 
     for restart in range(n_restarts):
         print(f"Restart {restart}")
@@ -585,35 +595,118 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
             seed=restart,
         )
 
+        num_train_envs = 2
+
         X_env0, y_env0 = envs[0]
         d = X_env0.shape[1]
         h = hidden_dim
-        num_train_envs = 2  # use first two envs for training, third as test
 
         limit_W = np.sqrt(6.0 / (d + h))
-        W = np.random.uniform(-limit_W, limit_W, (num_train_envs, h, d)).astype(np.float32)
-
+        W = np.random.uniform(-limit_W, limit_W,
+                              (num_train_envs, h, d)).astype(np.float32)
         limit_V = np.sqrt(6.0 / (h + 1))
-        V = np.random.uniform(-limit_V, limit_V, (num_train_envs, 1, h)).astype(np.float32)
+        V = np.random.uniform(-limit_V, limit_V,
+                              (num_train_envs, 1, h)).astype(np.float32)
 
         m_W = np.zeros_like(W)
-        m_V = np.zeros_like(V)
         v_W = np.zeros_like(W)
+        m_V = np.zeros_like(V)
         v_V = np.zeros_like(V)
-        beta1 = 0.9
-        beta2 = 0.999
-        eps = 1e-8
+        t_env = np.zeros(num_train_envs, dtype=np.int64)
+        train_envs = envs[:num_train_envs]
+
+        # Warm Start
+        if warm_start:
+            total_train_points = sum(X.shape[0] for (X, _) in train_envs)
+            steps_warm = max(1, total_train_points // batch_size)
+
+            for ws in range(steps_warm):
+                for env_idx in range(num_train_envs):
+                    X_e, y_e = train_envs[env_idx]
+                    N_e = X_e.shape[0]
+                    bsz = min(batch_size, N_e)
+                    idx = np.random.randint(0, N_e, size=bsz)
+                    Xb = X_e[idx]
+                    yb = y_e[idx]
+
+                    Z, H, F = forward(Xb, W[env_idx], V[env_idx])
+                    dW, dV = gradients_nll(Xb, yb, Z, H, F, W[env_idx], V[env_idx])
+                    dW += 2 * l2_regularizer_weight * W[env_idx]
+                    dV += 2 * l2_regularizer_weight * V[env_idx]
+                    t_env[env_idx] += 1
+                    t = t_env[env_idx]
+
+                    m_W[env_idx] = beta1 * m_W[env_idx] + (1 - beta1) * dW
+                    v_W[env_idx] = beta2 * v_W[env_idx] + (1 - beta2) * (dW ** 2)
+                    m_V[env_idx] = beta1 * m_V[env_idx] + (1 - beta1) * dV
+                    v_V[env_idx] = beta2 * v_V[env_idx] + (1 - beta2) * (dV ** 2)
+
+                    m_W_hat = m_W[env_idx] / (1 - beta1 ** t)
+                    v_W_hat = v_W[env_idx] / (1 - beta2 ** t)
+                    m_V_hat = m_V[env_idx] / (1 - beta1 ** t)
+                    v_V_hat = v_V[env_idx] / (1 - beta2 ** t)
+
+                    W[env_idx] -= lr * m_W_hat / (np.sqrt(v_W_hat) + eps)
+                    V[env_idx] -= lr * m_V_hat / (np.sqrt(v_V_hat) + eps)
 
         print("step         train nll    train acc    train penalty test acc")
 
         for step in range(steps):
+
+            for env_idx in range(num_train_envs):
+                X_e, y_e = train_envs[env_idx]
+                N_e = X_e.shape[0]
+                bsz = min(batch_size, N_e)
+                idx = np.random.randint(0, N_e, size=bsz)
+                Xb = X_e[idx]
+                yb = y_e[idx]
+
+                B = Xb.shape[0]
+                logits_sum = np.zeros(B, dtype=np.float32)
+                Z_env = None
+                H_env = None
+
+                for e in range(num_train_envs):
+                    if e == env_idx:
+                        Z_env, H_env, F_env = forward(Xb, W[e], V[e])
+                        logits_sum += F_env[:, 0]
+                    else:
+                        _, _, F_other = forward(Xb, W[e], V[e])
+                        logits_sum += F_other[:, 0]
+
+                ensemble_logits_env = logits_sum / float(num_train_envs)
+
+                dW_env, dV_env = gradients_nll_ensemble_env(
+                    Xb, yb,
+                    Z_env, H_env,
+                    ensemble_logits_env,
+                    W[env_idx], V[env_idx],
+                    num_envs=num_train_envs
+                )
+                dW_env += 2 * l2_regularizer_weight * W[env_idx]
+                dV_env += 2 * l2_regularizer_weight * V[env_idx]
+                t_env[env_idx] += 1
+                t = t_env[env_idx]
+
+                m_W[env_idx] = beta1 * m_W[env_idx] + (1 - beta1) * dW_env
+                v_W[env_idx] = beta2 * v_W[env_idx] + (1 - beta2) * (dW_env ** 2)
+                m_V[env_idx] = beta1 * m_V[env_idx] + (1 - beta1) * dV_env
+                v_V[env_idx] = beta2 * v_V[env_idx] + (1 - beta2) * (dV_env ** 2)
+
+                m_W_hat = m_W[env_idx] / (1 - beta1 ** t)
+                v_W_hat = v_W[env_idx] / (1 - beta2 ** t)
+                m_V_hat = m_V[env_idx] / (1 - beta1 ** t)
+                v_V_hat = v_V[env_idx] / (1 - beta2 ** t)
+
+                W[env_idx] -= lr * m_W_hat / (np.sqrt(v_W_hat) + eps)
+                V[env_idx] -= lr * m_V_hat / (np.sqrt(v_V_hat) + eps)
+
             env_nlls = []
             env_accs = []
             env_penalties = []
 
-            # Evaluate all envs under ensemble
-            for env_idx in range(len(envs)):
-                X_env, y_env = envs[env_idx]
+            for e_idx in range(len(envs)):
+                X_env, y_env = envs[e_idx]
                 logits_env = ensemble_logits_on_env(X_env, W, V)
                 nll = mean_nll(logits_env, y_env)
                 acc = mean_accuracy(logits_env, y_env)
@@ -625,65 +718,18 @@ def train_irm_game(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
             train_nll = np.mean(env_nlls[:num_train_envs])
             train_acc = np.mean(env_accs[:num_train_envs])
             train_penalty = np.mean(env_penalties[:num_train_envs])
-            test_acc = np.mean(env_accs[num_train_envs:])
+            test_acc = env_accs[num_train_envs]
 
-            total_grad_W = np.zeros_like(W)
-            total_grad_V = np.zeros_like(V)
-
-            # Update one env-player per step (round robin)
-            env_idx = step % num_train_envs
-            X_env, y_env = envs[env_idx]
-
-            B = X_env.shape[0]
-            logits_sum = np.zeros(B, dtype=np.float32)
-            Z_env = None
-            H_env = None
-
-            # Forward through each env-player on the chosen environment
-            for e in range(num_train_envs):
-                if e == env_idx:
-                    Z_env, H_env, F_env = forward(X_env, W[e], V[e])
-                    logits_sum += F_env[:, 0]
-                else:
-                    _, _, F_other = forward(X_env, W[e], V[e])
-                    logits_sum += F_other[:, 0]
-
-            ensemble_logits_env = logits_sum / float(num_train_envs)
-
-            dW_env, dV_env = gradients_nll_ensemble_env(
-                X_env, y_env, Z_env, H_env, ensemble_logits_env,
-                W[env_idx], V[env_idx], num_train_envs
-            )
-
-            dW_env += l2_regularizer_weight * 2 * W[env_idx]
-            dV_env += l2_regularizer_weight * 2 * V[env_idx]
-
-            total_grad_W[env_idx] = dW_env
-            total_grad_V[env_idx] = dV_env
-
-            m_W = beta1 * m_W + (1 - beta1) * total_grad_W
-            m_V = beta1 * m_V + (1 - beta1) * total_grad_V
-            v_W = beta2 * v_W + (1 - beta2) * (total_grad_W ** 2)
-            v_V = beta2 * v_V + (1 - beta2) * (total_grad_V ** 2)
-
-            m_W_hat = m_W / (1 - beta1 ** (step + 1))
-            m_V_hat = m_V / (1 - beta1 ** (step + 1))
-            v_W_hat = v_W / (1 - beta2 ** (step + 1))
-            v_V_hat = v_V / (1 - beta2 ** (step + 1))
-
-            W[env_idx] -= lr * m_W_hat[env_idx] / (np.sqrt(v_W_hat[env_idx]) + eps)
-            V[env_idx] -= lr * m_V_hat[env_idx] / (np.sqrt(v_V_hat[env_idx]) + eps)
-
-            if step % 100 == 0:
+            if step % 50 == 0:
                 print(f"{step:<12} {train_nll:<12.5f} {train_acc:<12.5f} "
                       f"{train_penalty:<13.5f} {test_acc:<12.5f}")
 
         final_train_accs.append(train_acc)
         final_test_accs.append(test_acc)
 
-        print(f"Final train acc (mean/std across restarts so far):")
+        print("Final train acc (mean/std across restarts so far):")
         print(f"{np.mean(final_train_accs):.5f} {np.std(final_train_accs):.5f}")
-        print(f"Final test acc (mean/std across restarts so far):")
+        print("Final test acc (mean/std across restarts so far):")
         print(f"{np.mean(final_test_accs):.5f} {np.std(final_test_accs):.5f}")
         print()
 
@@ -727,11 +773,13 @@ if __name__ == "__main__":
 
     print("\n Training IRM Games")
     irm_game_train_accs, irm_game_test_accs = train_irm_game(
-        hidden_dim=256,
-        l2_regularizer_weight=0.001,
-        lr=0.001,
-        n_restarts=10,
+        hidden_dim=256, 
+        l2_regularizer_weight=0.001, 
+        lr=2.5e-4,
+        n_restarts=10, 
         steps=501,
+        batch_size=256,
+        warm_start=True,
         env_mode=ENV_MODE,
         ticker=TICKER,
     )
