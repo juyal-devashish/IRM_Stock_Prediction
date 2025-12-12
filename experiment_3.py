@@ -9,7 +9,6 @@ import warnings
 warnings.filterwarnings('ignore')
 
 ### yfinance content below 
-
 def download_prices(ticker, start="2010-01-01", end="2024-01-01"):
     data = yf.download(ticker, start=start, end=end, group_by="column")
 

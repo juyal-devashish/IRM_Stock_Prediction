@@ -8,10 +8,7 @@ import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
 
-###############################################################################
 # Download prices via yfinance
-###############################################################################
-
 def download_prices(ticker, start="2010-01-01", end="2024-01-01"):
     data = yf.download(ticker, start=start, end=end, group_by="column")
 
@@ -42,9 +39,6 @@ def download_prices(ticker, start="2010-01-01", end="2024-01-01"):
     prices = data[target_col].values.astype(np.float32)
     return prices
 
-###############################################################################
-# Base environment: original single-env construction
-###############################################################################
 
 def make_finance_environment(prices, window=10, e=0.2, seed=None):
     """
@@ -84,9 +78,6 @@ def make_finance_environment(prices, window=10, e=0.2, seed=None):
 
     return X_full, y_noisy
 
-###############################################################################
-# New environment constructors
-###############################################################################
 
 def make_finance_envs_spurious_strength(
     prices,
@@ -136,14 +127,6 @@ def make_finance_envs_spurious_strength(
     return envs
 
 def make_factor_envs(prices, window=10, seed=None):
-    """
-    Factor-style envs:
-      - f1 = mean of past window returns (invariant factor)
-      - f2 = std of past window returns
-      - Label y depends only on f1 (sign of future return)
-      - Each env uses a different linear mix for x2 = alpha f1 + beta f2
-        so x2 can flip correlation with y in env3.
-    """
     if seed is not None:
         rng = np.random.RandomState(seed)
     else:
@@ -191,18 +174,6 @@ def make_trend_regime_envs(
     e_bear=0.9,
     seed=None,
 ):
-    """
-    Bull vs. Sideways vs. Bear Market Environments based on trend direction.
-
-    trend = MA_50(prices) - MA_200(prices)
-    Env 0: Bull market (trend > +threshold)
-    Env 1: Sideways market (|trend| <= threshold)
-    Env 2: Bear market (trend < -threshold)
-
-    We then:
-      - Train on Bull + Sideways (envs[0], envs[1])
-      - Test on Bear (envs[2]) as OOD regime
-    """
     if seed is not None:
         rng = np.random.RandomState(seed)
     else:
@@ -298,15 +269,6 @@ def make_trend_regime_envs(
 ###############################################################################
 
 def build_finance_envs(prices, window=10, env_mode="time_spurious", seed=0):
-    """
-    Returns a list of envs = [(X_env0, y_env0), (X_env1, y_env1), ...].
-
-    env_mode options:
-      - "time_spurious"     : original three time-slice envs with different e
-      - "spurious_strength" : Colored-MNIST style e_list on one long series
-      - "factor"            : factor-based envs (invariant + env-specific mix)
-      - "trend_regimes"     : bull vs sideways vs bear regimes from 50/200 MA
-    """
     if env_mode == "time_spurious":
         T = len(prices)
         prices_env1 = prices[: T // 3]
@@ -354,9 +316,6 @@ def build_finance_envs(prices, window=10, env_mode="time_spurious", seed=0):
     else:
         raise ValueError(f"Unknown env_mode: {env_mode}")
 
-###############################################################################
-# Training: ERM
-###############################################################################
 
 def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, steps=501, env_mode="time_spurious",
@@ -442,9 +401,6 @@ def train_erm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
     return final_train_accs, final_test_accs
 
-###############################################################################
-# Training: IRM
-###############################################################################
 
 def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
               n_restarts=10, penalty_anneal_iters=100, penalty_weight=10000.0,
@@ -562,9 +518,6 @@ def train_irm(hidden_dim=256, l2_regularizer_weight=0.001, lr=0.001,
 
     return final_train_accs, final_test_accs
 
-###############################################################################
-# Training: IRM Game
-###############################################################################
 
 def train_irm_game(hidden_dim=256, 
                    l2_regularizer_weight=0.001, 
@@ -735,9 +688,6 @@ def train_irm_game(hidden_dim=256,
 
     return final_train_accs, final_test_accs
 
-###############################################################################
-# Main: choose env_mode and ticker here
-###############################################################################
 
 if __name__ == "__main__":
     # Options: "time_spurious", "spurious_strength", "factor", "trend_regimes"
