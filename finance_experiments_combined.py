@@ -834,3 +834,158 @@ if __name__ == "__main__":
         print(f"\nSaved plot: {out_name}")
     except Exception as e:
         print(f"\nPlotting skipped (error): {e}")
+
+
+
+
+    # # For one-time graph
+    # import argparse
+    # import numpy as np
+    # import matplotlib.pyplot as plt
+
+    # # Same presets you already had
+    # PRESETS = {
+    #     1: dict(name="Experiment 1: time split (spurious changes over time)",
+    #             env_mode="time_spurious", ticker="aapl", label_noise=0.0),
+    #     2: dict(name="Experiment 2: regime-style envs (trend_regimes by default)",
+    #             env_mode="trend_regimes", ticker="SPY", label_noise=0.01),
+    #     3: dict(name="Experiment 3: volatility regimes (low/mid/high vol)",
+    #             env_mode="volatility", ticker="wmt", label_noise=0.01),
+    # }
+
+    # parser = argparse.ArgumentParser(
+    #     description="One-off sweep plot: Train/Test bars across Exp×Ticker for ERM/IRM/IRM-Games"
+    # )
+    # parser.add_argument("--methods", type=str, default="erm,irm,irm_game",
+    #                     help="Comma-separated methods to run: erm, irm, irm_game.")
+    # parser.add_argument("--n-restarts", type=int, default=10)
+    # parser.add_argument("--steps", type=int, default=501)
+    # parser.add_argument("--window", type=int, default=10)
+    # parser.add_argument("--start", type=str, default="2010-01-01")
+    # parser.add_argument("--end", type=str, default="2024-01-01")
+    # parser.add_argument("--hidden-dim", type=int, default=256)
+    # parser.add_argument("--l2", type=float, default=0.001)
+    # parser.add_argument("--lr", type=float, default=0.001)
+    # parser.add_argument("--penalty-anneal-iters", type=int, default=100)
+    # parser.add_argument("--penalty-weight", type=float, default=10000.0)
+    # parser.add_argument("--batch-size", type=int, default=256)
+    # parser.add_argument("--warm-start", action="store_true", default=True)
+
+    # args = parser.parse_args()
+    # methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+
+    # # ONE-TIME sweep plan (edit these lists if you want different ordering)
+    # sweep_exps = [3, 2, 1]
+    # sweep_tickers = ["WMT", "VOO", "AAPL"]
+
+    # # Storage: for each Exp×Ticker label, store mean train/test for each method
+    # xticklabels = []
+    # train_vals = {"ERM": [], "IRM": [], "IRM Games": []}
+    # test_vals  = {"ERM": [], "IRM": [], "IRM Games": []}
+
+    # for exp_id in sweep_exps:
+    #     preset = PRESETS[exp_id]
+    #     env_mode = preset["env_mode"]
+    #     label_noise = preset["label_noise"]
+
+    #     for tkr in sweep_tickers:
+    #         ticker = tkr.lower()
+    #         xticklabels.append(f"Exp{exp_id}-{tkr}")
+
+    #         print(f"\n=== Exp {exp_id} | env_mode={env_mode} | ticker={tkr} | label_noise={label_noise} ===")
+
+    #         if "erm" in methods:
+    #             tr, te = train_erm(
+    #                 hidden_dim=args.hidden_dim,
+    #                 l2_regularizer_weight=args.l2,
+    #                 lr=args.lr,
+    #                 n_restarts=args.n_restarts,
+    #                 steps=args.steps,
+    #                 env_mode=env_mode,
+    #                 ticker=ticker,
+    #                 window=args.window,
+    #                 start=args.start,
+    #                 end=args.end,
+    #                 label_noise=label_noise,
+    #             )
+    #             train_vals["ERM"].append(np.mean(tr) * 100.0)
+    #             test_vals["ERM"].append(np.mean(te) * 100.0)
+    #         else:
+    #             train_vals["ERM"].append(np.nan)
+    #             test_vals["ERM"].append(np.nan)
+
+    #         if "irm" in methods:
+    #             tr, te = train_irm(
+    #                 hidden_dim=args.hidden_dim,
+    #                 l2_regularizer_weight=args.l2,
+    #                 lr=args.lr,
+    #                 n_restarts=args.n_restarts,
+    #                 penalty_anneal_iters=args.penalty_anneal_iters,
+    #                 penalty_weight=args.penalty_weight,
+    #                 steps=args.steps,
+    #                 env_mode=env_mode,
+    #                 ticker=ticker,
+    #                 window=args.window,
+    #                 start=args.start,
+    #                 end=args.end,
+    #                 label_noise=label_noise,
+    #             )
+    #             train_vals["IRM"].append(np.mean(tr) * 100.0)
+    #             test_vals["IRM"].append(np.mean(te) * 100.0)
+    #         else:
+    #             train_vals["IRM"].append(np.nan)
+    #             test_vals["IRM"].append(np.nan)
+
+    #         if "irm_game" in methods:
+    #             tr, te = train_irm_game(
+    #                 hidden_dim=args.hidden_dim,
+    #                 l2_regularizer_weight=args.l2,
+    #                 lr=2.5e-4 if args.lr == 0.001 else args.lr,
+    #                 n_restarts=args.n_restarts,
+    #                 steps=500 if args.steps == 501 else args.steps,
+    #                 batch_size=args.batch_size,
+    #                 warm_start=args.warm_start,
+    #                 env_mode=env_mode,
+    #                 ticker=ticker,
+    #                 window=args.window,
+    #                 start=args.start,
+    #                 end=args.end,
+    #                 label_noise=label_noise,
+    #             )
+    #             train_vals["IRM Games"].append(np.mean(tr) * 100.0)
+    #             test_vals["IRM Games"].append(np.mean(te) * 100.0)
+    #         else:
+    #             train_vals["IRM Games"].append(np.nan)
+    #             test_vals["IRM Games"].append(np.nan)
+
+    # # --- Plot: TEST (top) + TRAIN (bottom), grouped bars like your attachment ---
+    # plot_keys = ["ERM", "IRM", "IRM Games"]
+    # legend_names = {"ERM": "ERM", "IRM": "IRM", "IRM Games": "IRM-G"}
+
+    # x = np.arange(len(xticklabels))
+    # width = 0.25
+    # offsets = [-width, 0.0, width]
+
+    # fig, (ax_test, ax_train) = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
+
+    # for i, k in enumerate(plot_keys):
+    #     ax_test.bar(x + offsets[i], test_vals[k], width, label=legend_names[k])
+    # ax_test.set_title("Comparison of Test Accuracies Across Experiments and Methods")
+    # ax_test.set_ylabel("Test Accuracy (%)")
+    # ax_test.grid(axis="y", alpha=0.3)
+    # ax_test.legend(loc="upper right")
+
+    # for i, k in enumerate(plot_keys):
+    #     ax_train.bar(x + offsets[i], train_vals[k], width, label=k)
+    # ax_train.set_title("Train Accuracy Comparison Across Experiments and Methods")
+    # ax_train.set_ylabel("Train Accuracy (%)")
+    # ax_train.set_xlabel("Experiment")
+    # ax_train.set_xticks(x)
+    # ax_train.set_xticklabels(xticklabels, rotation=45, ha="right")
+    # ax_train.grid(axis="y", alpha=0.3)
+    # ax_train.legend(loc="upper right")
+
+    # plt.tight_layout()
+    # out_name = "accuracy_sweep_stacked.png"
+    # plt.savefig(out_name, dpi=150, bbox_inches="tight")
+    # print(f"\nSaved plot: {out_name}")
