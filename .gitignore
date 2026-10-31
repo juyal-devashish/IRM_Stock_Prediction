@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Run outputs (curated results live in results/)
+outputs/
+.cache/
+
+# Claude Code personal files
+CLAUDE.local.md
+.claude/settings.local.json
