@@ -47,7 +47,7 @@ jobs:
       - run: uv sync
 
       - name: Run walk-forward
-        run: uv run irm-stock walk-forward --tickers SPY,AAPL,WMT,VOO --data-dir data
+        run: uv run irm-stock walk-forward --tickers SPY,AAPL,NVDA,MSFT,GOOGL,AMZN,WMT,VOO --data-dir data
 
       - name: Commit and push results
         working-directory: data

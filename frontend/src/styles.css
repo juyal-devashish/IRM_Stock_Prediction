@@ -246,3 +246,5 @@ input[type="range"] { width: 100%; accent-color: var(--ink); min-height: 1.75rem
 .line-chart .annotation-label { fill: var(--ink-2); font-size: 11px; }
 .line-chart .dial-marker { stroke: var(--ink); stroke-width: 1.5; }
 .chart-note { margin: 0.25rem 0.5rem 0.5rem; }
+.table-note { margin: 0; padding: 0.6rem 1rem 0.8rem; font-size: 0.85rem; color: var(--ink-2); border-top: 1px solid var(--rule); max-width: none; }
+th sup { color: var(--ink-2); margin-left: 0.1rem; }

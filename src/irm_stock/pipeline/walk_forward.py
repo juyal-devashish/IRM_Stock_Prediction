@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 TRAIN_START = "2010-01-01"
 CUTOFF = "2024-01-01"
-DEFAULT_TICKERS = ("SPY", "AAPL", "WMT", "VOO")
+DEFAULT_TICKERS = ("SPY", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "WMT", "VOO")
 VARIANTS = {"shortcut_flipped": 0.9, "no_shortcut": 0.5}  # value = e (disagreement prob.)
 VOL_WINDOW = 20
 #: Extra days fetched before the cutoff so moving averages are defined at the cutoff.

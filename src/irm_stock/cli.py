@@ -138,7 +138,11 @@ def build_parser() -> argparse.ArgumentParser:
         "walk-forward",
         help="Score frozen (pre-2024) models on all data since 2024; append to a history.",
     )
-    wf.add_argument("--tickers", default="SPY,AAPL,WMT,VOO", help="Comma-separated tickers.")
+    wf.add_argument(
+        "--tickers",
+        default="SPY,AAPL,NVDA,MSFT,GOOGL,AMZN,WMT,VOO",
+        help="Comma-separated tickers.",
+    )
     wf.add_argument(
         "--data-dir",
         type=Path,
