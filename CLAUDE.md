@@ -18,7 +18,12 @@ Research code comparing ERM, IRMv1 and IRM-Games (pure NumPy, hand-written gradi
 ## Dashboard
 - `frontend/` is Vite + React + TS (no chart library; charts are hand-written SVG). Data comes from `scripts/build_dashboard_data.py`, which parses `results/`; `frontend/public/{data,figures}` are generated and gitignored.
 - Check: `uv run python scripts/build_dashboard_data.py && cd frontend && npm run build`. CI (`.github/workflows/ci.yml`) runs both Python and frontend jobs; `pages.yml` deploys `main` to GitHub Pages with `VITE_BASE=/<repo>/`.
+- `frontend/src/lab/` is a TypeScript port of `core/` + `methods/`. After changing either side, run `uv run python scripts/export_lab_fixtures.py` and `cd frontend && npm test`; never loosen the parity tolerances to make them pass.
 - Colours: ERM blue, IRM orange, IRM-Games aqua (validated categorical slots 1-3, light and dark). Keep a method's colour fixed across every chart.
+
+## Walk-forward pipeline
+- `uv run irm-stock walk-forward --data-dir data` trains frozen pre-2024 models once and scores them on all data since 2024. `.github/workflows/pipeline.yml` runs it weekly against a checkout of the `data` branch (models, price cache, `history.json`); never commit `data/` to main.
+- IRM's post-2024 accuracy equals the up-day base rate (it predicts "up"): keep the base rate next to it in any UI.
 
 ## Gotchas
 - Refactors must keep `tests/test_regression_legacy.py` passing. Numerical changes (even "bug fixes") need an explicit decision from the user and re-baselined results.
