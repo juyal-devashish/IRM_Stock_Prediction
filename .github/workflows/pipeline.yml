@@ -1,0 +1,71 @@
+name: Weekly walk-forward
+
+# Scores the frozen pre-2024 models on all market data since 2024-01-01, appends a
+# snapshot to history.json on the `data` branch, then rebuilds the Pages site.
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: walk-forward
+  cancel-in-progress: false
+
+jobs:
+  walk-forward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Does the data branch exist?
+        id: branch
+        run: echo "exists=$(git ls-remote --heads origin data | wc -l | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Check out data branch
+        if: steps.branch.outputs.exists != '0'
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data
+
+      - name: Create data branch (first run)
+        if: steps.branch.outputs.exists == '0'
+        run: |
+          mkdir data && cd data
+          git init -q -b data
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          printf '# Walk-forward data\n\nWritten weekly by .github/workflows/pipeline.yml. Do not edit by hand.\n' > README.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync
+
+      - name: Run walk-forward
+        run: uv run irm-stock walk-forward --tickers SPY,AAPL,WMT,VOO --data-dir data
+
+      - name: Commit and push results
+        working-directory: data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -q -m "Walk-forward snapshot $(date -u +%F)"
+            git push origin data
+          fi
+
+  deploy:
+    needs: walk-forward
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml
