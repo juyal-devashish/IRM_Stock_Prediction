@@ -154,12 +154,16 @@ FIGURES = [
     (
         "finance/combined_finance_3_volatility_wmt.png",
         "finance-volatility-wmt.png",
-        "Volatility regimes on WMT: train and test accuracy, and the gap between them",
+        "Volatility regimes on WMT: train and test accuracy, and the gap between them. "
+        "From a later run than the WMT row in the table, so the numbers differ, "
+        "most for IRM-Games",
     ),
     (
         "finance/combined_finance_1_time_spurious_aapl.png",
         "finance-time-split-aapl.png",
-        "Time split on AAPL: train and test accuracy, and the gap between them",
+        "Time split on AAPL: train and test accuracy, and the gap between them. "
+        "From a later run than the AAPL row in the table, so the numbers differ, "
+        "most for IRM-Games",
     ),
     (
         "colored_mnist/erm_irm_irmgames_comparison.png",
