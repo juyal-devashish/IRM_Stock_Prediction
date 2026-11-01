@@ -5,7 +5,8 @@ frontend/public/figures/. Run from the repo root:
 
     uv run python scripts/build_dashboard_data.py
 
-Only logs whose filename names the ticker are used. Unlabelled logs
+Only logs whose filename names the ticker are used; results/runs/finance/*.json
+(package runs) fill in tickers that have no log. Unlabelled logs
 (experimentN_output*.txt) and the truncated experiment_2_aapl_new.txt are skipped
 because their ticker / completeness cannot be verified.
 """
@@ -21,6 +22,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 LOGS = ROOT / "results" / "logs" / "finance"
+RUNS = ROOT / "results" / "runs" / "finance"  # from scripts/run_report_experiments.py
 FIGS = ROOT / "results" / "figures"
 OUT = ROOT / "frontend" / "public"
 
@@ -59,6 +61,39 @@ FINANCE_RUNS = [
     (3, "VOO", "experiment3_voo_output.txt"),
     (3, "WMT", "experiment3_wmt_output.txt"),
 ]
+
+#: Display order of tickers in each benchmark (S&P 500 first, then by market cap).
+TICKER_ORDER = ["SPY", "AAPL", "NVDA", "MSFT", "GOOGL", "AMZN", "VOO", "WMT"]
+TICKER_LABELS = {"SPY": "S&P 500 (SPY)"}
+
+
+def json_runs(exp: int, have: set[str]) -> list[dict]:
+    """Curated package runs for tickers that have no original report log."""
+    runs = []
+    for path in sorted(RUNS.glob(f"exp{exp}_*.json")):
+        data = json.loads(path.read_text())
+        if data["ticker"] in have:
+            continue
+        methods = {
+            k: {
+                "train_mean": r["train_mean"],
+                "train_std": r["train_std"],
+                "test_mean": r["test_mean"],
+                "test_std": r["test_std"],
+                "n_restarts": len(r["test_accs"]),
+            }
+            for k, r in data["results"].items()
+        }
+        runs.append(
+            {
+                "ticker": data["ticker"],
+                "source": f"results/runs/finance/{path.name}",
+                "computed_on": data["computed_on"],
+                "methods": methods,
+            }
+        )
+    return runs
+
 
 # Matches e.g. "ERM Results:\n  Train: 77.7% ± 0.4%\n  Test:  21.4% ± 0.6%" (± may be mojibake).
 BLOCK = re.compile(
@@ -152,7 +187,6 @@ def main(live: Path | None = None) -> None:
     for exp, (bid, label, _mode, desc) in FINANCE_BENCHMARKS.items():
         runs = [
             {
-                "id": f"{bid}-{ticker.lower()}",
                 "ticker": ticker,
                 "source": f"results/logs/finance/{fname}",
                 "methods": parse_log(LOGS / fname),
@@ -160,6 +194,12 @@ def main(live: Path | None = None) -> None:
             for e, ticker, fname in FINANCE_RUNS
             if e == exp
         ]
+        runs += json_runs(exp, {r["ticker"] for r in runs})
+        rank = {t: i for i, t in enumerate(TICKER_ORDER)}
+        runs.sort(key=lambda r: rank.get(r["ticker"], len(rank)))
+        for r in runs:
+            r["id"] = f"{bid}-{r['ticker'].lower()}"
+            r["label"] = TICKER_LABELS.get(r["ticker"], r["ticker"])
         benchmarks.append({"id": bid, "label": label, "description": desc, "runs": runs})
 
     OUT.joinpath("data").mkdir(parents=True, exist_ok=True)

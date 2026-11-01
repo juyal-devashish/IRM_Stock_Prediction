@@ -17,6 +17,8 @@ const VARIANTS: { key: Variant; label: string; note: string }[] = [
   },
 ];
 
+const TICKER_LABELS: Record<string, string> = { SPY: "S&P 500 (SPY)" };
+
 const TREND = { bull: "bull market", bear: "bear market", side: "sideways market", unknown: "unclear trend" };
 
 export function Live({ history }: { history: LiveSnapshot[] }) {
@@ -39,7 +41,7 @@ export function Live({ history }: { history: LiveSnapshot[] }) {
       <div className="controls" role="group" aria-label="Choose a ticker">
         {tickers.map((k) => (
           <button key={k} type="button" className="chip small" aria-pressed={k === ticker} onClick={() => setTicker(k)}>
-            {k}
+            {TICKER_LABELS[k] ?? k}
           </button>
         ))}
       </div>
@@ -58,7 +60,7 @@ export function Live({ history }: { history: LiveSnapshot[] }) {
       </div>
 
       <p className="regime">
-        {ticker} now: {TREND[t.regime.trend]}, {t.regime.volatility} volatility compared with 2010–2023.
+        {TICKER_LABELS[ticker] ?? ticker} now: {TREND[t.regime.trend]}, {t.regime.volatility} volatility compared with 2010–2023.
       </p>
 
       <div className="panel">

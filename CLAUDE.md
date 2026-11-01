@@ -18,6 +18,7 @@ Research code comparing ERM, IRMv1 and IRM-Games (pure NumPy, hand-written gradi
 ## Dashboard
 - `frontend/` is Vite + React + TS (no chart library; charts are hand-written SVG). Data comes from `scripts/build_dashboard_data.py`, which parses `results/`; `frontend/public/{data,figures}` are generated and gitignored.
 - Check: `uv run python scripts/build_dashboard_data.py && cd frontend && npm run build`. CI (`.github/workflows/ci.yml`) runs both Python and frontend jobs; `pages.yml` deploys `main` to GitHub Pages with `VITE_BASE=/<repo>/`.
+- Extra report tickers: `uv run python scripts/run_report_experiments.py --tickers ... --skip-existing` writes `results/runs/finance/exp<N>_<TICKER>.json`; the builder uses them only for tickers with no original log (marked * on the page). Add new tickers to `pipeline.yml` too.
 - `frontend/src/lab/` is a TypeScript port of `core/` + `methods/`. After changing either side, run `uv run python scripts/export_lab_fixtures.py` and `cd frontend && npm test`; never loosen the parity tolerances to make them pass.
 - Colours: ERM blue, IRM orange, IRM-Games aqua (validated categorical slots 1-3, light and dark). Keep a method's colour fixed across every chart.
 

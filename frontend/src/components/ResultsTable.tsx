@@ -25,7 +25,10 @@ export function ResultsTable({ benchmark }: { benchmark: Benchmark }) {
               const s = run.methods[key];
               return (
                 <tr key={`${run.id}-${key}`} className={i === 0 ? "group-start" : undefined}>
-                  <th scope="row">{i === 0 ? (run.ticker ?? benchmark.label) : ""}</th>
+                  <th scope="row">
+                    {i === 0 ? (run.ticker ?? benchmark.label) : ""}
+                    {i === 0 && run.computed_on ? <sup aria-label="computed with the current code">*</sup> : null}
+                  </th>
                   <td>
                     <span className="swatch" style={{ background: `var(--m-${key})` }} />
                     {METHOD_INFO[key].label}
@@ -44,6 +47,12 @@ export function ResultsTable({ benchmark }: { benchmark: Benchmark }) {
           )}
         </tbody>
       </table>
+      {benchmark.runs.some((r) => r.computed_on) && (
+        <p className="table-note">
+          * Computed with the current code on {benchmark.runs.find((r) => r.computed_on)!.computed_on}, using the same
+          settings as the report. Other rows are the original report runs.
+        </p>
+      )}
     </div>
   );
 }

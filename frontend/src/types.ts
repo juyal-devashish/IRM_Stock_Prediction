@@ -11,6 +11,10 @@ export interface MethodStats {
 export interface Run {
   id: string;
   ticker: string | null;
+  /** Display name, e.g. "S&P 500 (SPY)". */
+  label?: string;
+  /** Set for runs computed with the current package (not the original report logs). */
+  computed_on?: string;
   source: string;
   methods: Record<MethodKey, MethodStats>;
 }

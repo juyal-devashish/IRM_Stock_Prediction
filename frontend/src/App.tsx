@@ -8,7 +8,7 @@ import { Shortcut } from "./components/Shortcut";
 import { pct } from "./format";
 import { useLive, useResults, useTheme } from "./hooks";
 import { METHOD_INFO, METHOD_ORDER } from "./methods";
-import type { LiveSnapshot, Results } from "./types";
+import type { LiveSnapshot, Results, Run } from "./types";
 
 const REPO = "https://github.com/juyal-devashish/IRM_Stock_Prediction";
 
@@ -52,6 +52,20 @@ export default function App() {
       </footer>
     </>
   );
+}
+
+/** One-sentence takeaway for a finance run, written from its own numbers. */
+function readingFor(run: Run, benchLabel: string): string {
+  const { erm, irm } = run.methods;
+  const name = run.label ?? run.ticker ?? benchLabel;
+  const ermPart = `On ${name}, ERM falls to ${pct(erm.test_mean)} on the test set`;
+  if (irm.test_mean < 0.47) {
+    return `${ermPart}, and IRM drops below a coin flip too (${pct(irm.test_mean)}): on this split it does not hold up either.`;
+  }
+  if (irm.test_mean <= 0.56) {
+    return `${ermPart}, while IRM stays near chance (${pct(irm.test_mean)}): it stops trusting the shortcut but does not find a stronger signal.`;
+  }
+  return `${ermPart}, while IRM keeps ${pct(irm.test_mean)}.`;
 }
 
 function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] | null; theme: string }) {
@@ -103,7 +117,7 @@ function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] 
                 aria-pressed={r.id === run.id}
                 onClick={() => setRunId(r.id)}
               >
-                {r.ticker}
+                {r.label ?? r.ticker}
               </button>
             ))}
           </div>
@@ -115,7 +129,7 @@ function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] 
         <p className="reading">
           {bench.label === "ColoredMNIST"
             ? "On ColoredMNIST, ERM and IRM-Games fall to about 10%, far below chance, while IRM keeps 65%."
-            : "On shifted stock data, IRM stays near 50%. That is chance level: it stops trusting the shortcut but does not find a stronger signal. IRM-Games varies by ticker."}
+            : readingFor(run, bench.label)}
         </p>
       </section>
 
