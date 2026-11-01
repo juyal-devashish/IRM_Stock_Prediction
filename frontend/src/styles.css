@@ -187,3 +187,45 @@ footer { padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var
 .baseline-swatch { background: var(--axis); height: 0.5rem; width: 1.1rem; border-radius: 4px; }
 .line-chart .readout { padding: 0.25rem 0.5rem 0.25rem; margin: 0; font-size: 0.875rem; color: var(--ink-2); }
 #live .table-wrap { margin-top: 1.25rem; }
+
+/* Lab */
+.lab-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 1.25rem 0 1rem; }
+.chip.primary { background: var(--ink); color: var(--page); border-color: var(--ink); min-width: 9.5rem; }
+.chip.primary[aria-pressed="true"] { background: transparent; color: var(--ink); }
+.chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.lab-round { color: var(--ink-2); font-size: 0.95rem; }
+.lab-sliders { display: grid; gap: 0.75rem 2rem; margin-bottom: 1.5rem; max-width: 44rem; }
+@media (min-width: 44rem) { .lab-sliders { grid-template-columns: 1fr 1fr; } }
+.lab-sliders label, .lab-dial label { display: grid; gap: 0.35rem; font-size: 0.95rem; color: var(--ink-2); }
+.lab-sliders b, .lab-dial b { color: var(--ink); }
+input[type="range"] { width: 100%; accent-color: var(--ink); min-height: 1.75rem; }
+.lab-panels { display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 52rem) { .lab-panels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.boundary { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0.75rem; }
+.boundary figcaption { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.5rem; font-size: 1rem; }
+.boundary .swatch { margin-right: 0.1rem; }
+.players { display: inline-flex; gap: 0.3rem; margin-left: auto; font-size: 0.8rem; }
+.player { border: 1px solid var(--rule); border-radius: 999px; padding: 0.05rem 0.5rem; color: var(--ink-2); }
+.player.is-turn { border-color: var(--m); color: var(--ink); box-shadow: inset 0 0 0 1px var(--m); }
+.canvas-wrap { position: relative; overflow: hidden; border-left: 1px solid var(--axis); border-bottom: 1px solid var(--axis); }
+.canvas-wrap canvas { display: block; }
+.axis-x, .axis-y { position: absolute; font-size: 0.75rem; color: var(--muted); }
+.axis-x { right: 4px; bottom: 2px; }
+.axis-y { left: 4px; top: 2px; }
+.boundary-stats { display: grid; grid-template-columns: auto auto 1fr; gap: 0.25rem 1rem; margin: 0.6rem 0 0; font-size: 0.875rem; }
+.boundary-stats dt { color: var(--ink-2); }
+.boundary-stats dd { margin: 0; font-weight: 650; font-size: 1.05rem; }
+.boundary-stats dd.below { color: var(--ink); text-decoration: underline wavy var(--m) 1.5px; text-underline-offset: 0.25em; }
+.share dd { display: flex; align-items: center; gap: 0.5rem; }
+.share-bar { flex: 1; height: 8px; background: var(--grid); border-radius: 2px 4px 4px 2px; position: relative; max-width: 7rem; }
+.share-bar span { position: absolute; inset: 0 auto 0 0; background: var(--m); border-radius: 2px 4px 4px 2px; }
+.lab-dial { margin: 1.75rem 0 1.25rem; max-width: 44rem; }
+.lab-dial label { font-size: 1.05rem; }
+.lab-charts { display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr); }
+.lab-charts .panel { min-width: 0; }
+@media (min-width: 52rem) { .lab-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.chart-title { font-size: 0.95rem; font-weight: 600; margin: 0.25rem 0.5rem 0.5rem; }
+.line-chart .annotation { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 2 3; }
+.line-chart .annotation-label { fill: var(--ink-2); font-size: 11px; }
+.line-chart .dial-marker { stroke: var(--ink); stroke-width: 1.5; }
+.chart-note { margin: 0.25rem 0.5rem 0.5rem; }

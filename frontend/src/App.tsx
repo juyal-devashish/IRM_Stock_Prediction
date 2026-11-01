@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { DropChart } from "./components/DropChart";
 import { Live } from "./components/Live";
+import { Lab } from "./lab/Lab";
 import { ResultsTable } from "./components/ResultsTable";
 import { Shortcut } from "./components/Shortcut";
 import { pct } from "./format";
@@ -20,6 +21,7 @@ export default function App() {
       <header className="topbar">
         <a className="brand" href="#top">IRM Stock Prediction</a>
         <nav aria-label="Primary">
+          <a href="#lab">Lab</a>
           <a href="#results">Results</a>
           <a href="#live">Since 2024</a>
           <a href="#figures">Figures</a>
@@ -38,7 +40,7 @@ export default function App() {
           </p>
         )}
         {!data && !error && <p className="notice">Loading results…</p>}
-        {data && <Dashboard data={data} live={live} />}
+        {data && <Dashboard data={data} live={live} theme={theme} />}
       </main>
       <footer>
         <p>
@@ -51,7 +53,7 @@ export default function App() {
   );
 }
 
-function Dashboard({ data, live }: { data: Results; live: LiveSnapshot[] | null }) {
+function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] | null; theme: string }) {
   const [benchId, setBenchId] = useState("time-split");
   const bench = data.benchmarks.find((b) => b.id === benchId) ?? data.benchmarks[0];
   const [runId, setRunId] = useState<string | null>(null);
@@ -115,6 +117,8 @@ function Dashboard({ data, live }: { data: Results; live: LiveSnapshot[] | null 
             : "On shifted stock data, IRM stays near 50%. That is chance level: it stops trusting the shortcut but does not find a stronger signal. IRM-Games varies by ticker."}
         </p>
       </section>
+
+      <Lab theme={theme} />
 
       <section id="results" aria-labelledby="h-why">
         <h2 id="h-why">What changes between training and test</h2>
