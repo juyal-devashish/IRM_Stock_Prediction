@@ -21,6 +21,18 @@ uv run irm-stock serve         # demo API at http://127.0.0.1:8000/docs
 
 Runs write `results.json`, a plot and `run.log` to `outputs/<experiment>/<timestamp>_<slug>/`.
 
+## Dashboard
+
+A static React dashboard (`frontend/`) shows the results; it is deployed to GitHub Pages from `main`.
+
+```bash
+uv run python scripts/build_dashboard_data.py   # results/ -> frontend/public/{data,figures}
+cd frontend && npm ci && npm run dev
+```
+
+`frontend/public/data` and `frontend/public/figures` are generated and gitignored. Only finance logs whose filename
+names the ticker are used (see the docstring in `scripts/build_dashboard_data.py`).
+
 ## Layout
 
 | Path | Contents |
@@ -31,6 +43,9 @@ Runs write `results.json`, a plot and `run.log` to `outputs/<experiment>/<timest
 | `results/` | Curated figures, logs and saved arrays from the reported runs |
 | `notebooks/` | Exploration notebooks |
 | `outputs/` | New run output (gitignored) |
+| `frontend/` | Dashboard (Vite + React + TypeScript) |
+| `scripts/` | `build_dashboard_data.py` |
+| `.github/workflows/` | `ci.yml` (lint, tests, frontend build), `pages.yml` (deploy dashboard) |
 
 ## Development
 
