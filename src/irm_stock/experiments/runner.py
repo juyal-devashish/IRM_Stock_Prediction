@@ -37,7 +37,7 @@ class MethodConfigs:
     irm_games: IRMGamesConfig = field(default_factory=IRMGamesConfig)
 
 
-def _train(method: str, envs: list[Environment], configs: MethodConfigs, rng) -> TrainResult:
+def train_method(method: str, envs: list[Environment], configs: MethodConfigs, rng) -> TrainResult:
     train_envs, test_env = envs[:-1], envs[-1]
     if method == "erm":
         return train_erm(train_envs, test_env, configs.erm, rng)
@@ -68,7 +68,7 @@ def run_methods(
         for restart in range(n_restarts):
             logger.info("Restart %d", restart)
             envs = env_factory(restart, rng)
-            result = _train(method, envs, configs, rng)
+            result = train_method(method, envs, configs, rng)
             summary.train_accs.append(result.train_acc)
             summary.test_accs.append(result.test_acc)
             logger.info(

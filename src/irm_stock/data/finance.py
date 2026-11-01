@@ -45,7 +45,8 @@ def _cache_dir() -> Path:
     return Path(os.environ.get("IRM_STOCK_CACHE_DIR", Path.home() / ".cache" / "irm_stock"))
 
 
-def _fetch_close_prices(ticker: str, start: str, end: str) -> np.ndarray:
+def fetch_close_series(ticker: str, start: str, end: str) -> pd.Series:
+    """Daily (adjusted) close prices indexed by date, straight from yfinance (no cache)."""
     import yfinance as yf
 
     data = yf.download(ticker, start=start, end=end, group_by="column", progress=False)
@@ -63,7 +64,7 @@ def _fetch_close_prices(ticker: str, start: str, end: str) -> np.ndarray:
         (c for cand in ("Adj Close", "Close") for c in cols if cand in c),
         cols[-1],
     )
-    return data[target].to_numpy().astype(np.float32)
+    return data[target].astype(np.float32).rename(ticker.upper())
 
 
 def download_prices(
@@ -85,7 +86,7 @@ def download_prices(
         return np.load(path)
 
     logger.info("Downloading %s prices %s to %s", ticker, start, end)
-    prices = _fetch_close_prices(ticker, start, end)
+    prices = fetch_close_series(ticker, start, end).to_numpy().astype(np.float32)
     if cacheable:
         path.parent.mkdir(parents=True, exist_ok=True)
         np.save(path, prices)
@@ -191,6 +192,25 @@ def make_factor_envs(prices: np.ndarray, window: int = 10) -> list[Environment]:
     return [env(1.0, 0.5), env(0.8, -0.7), env(-1.0, 0.5)]
 
 
+def trend_series(prices: np.ndarray, short_window: int = 50, long_window: int = 200) -> np.ndarray:
+    """Short-minus-long moving-average gap per day (NaN until ``long_window`` days)."""
+    series = pd.Series(np.asarray(prices, dtype=np.float32))
+    return (series.rolling(short_window).mean() - series.rolling(long_window).mean()).values
+
+
+def sideways_threshold(trend: np.ndarray, side_eps: float = 0.5) -> float:
+    """Gaps within ``side_eps`` standard deviations of zero count as a sideways market."""
+    valid = trend[~np.isnan(trend)]
+    if len(valid) == 0:
+        raise ValueError("Trend is all NaN; use a longer date range or shorter MA windows.")
+    return side_eps * np.std(valid)
+
+
+def classify_trend(gap: float, side_thresh: float) -> str:
+    """Return ``"bull"``, ``"bear"`` or ``"side"`` for one moving-average gap."""
+    return "bull" if gap > side_thresh else "bear" if gap < -side_thresh else "side"
+
+
 def make_trend_regime_envs(
     prices: np.ndarray,
     window: int = 10,
@@ -210,16 +230,11 @@ def make_trend_regime_envs(
     """
     rng = _rng(seed)
     prices = np.asarray(prices, dtype=np.float32)
-    series = pd.Series(prices)
-    trend = (series.rolling(short_window).mean() - series.rolling(long_window).mean()).values
+    trend = trend_series(prices, short_window, long_window)
 
     returns = prices[1:] / prices[:-1] - 1
     labels = (returns[1:] > 0).astype(np.float32)
-
-    valid = trend[~np.isnan(trend)]
-    if len(valid) == 0:
-        raise ValueError("Trend is all NaN; use a longer date range or shorter MA windows.")
-    side_thresh = side_eps * np.std(valid)
+    side_thresh = sideways_threshold(trend, side_eps)
 
     buckets: dict[str, tuple[list[np.ndarray], list[float]]] = {
         "bull": ([], []),
@@ -230,7 +245,7 @@ def make_trend_regime_envs(
         tr = trend[t + 1]
         if np.isnan(tr):
             continue
-        regime = "bull" if tr > side_thresh else "bear" if tr < -side_thresh else "side"
+        regime = classify_trend(tr, side_thresh)
         buckets[regime][0].append(returns[t - window : t])
         buckets[regime][1].append(labels[t])
 
