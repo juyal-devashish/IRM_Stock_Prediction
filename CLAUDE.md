@@ -15,6 +15,11 @@ Research code comparing ERM, IRMv1 and IRM-Games (pure NumPy, hand-written gradi
 - `legacy/`: original research scripts. **Never edit.** `tests/test_regression_legacy.py` compares the package against them bit-for-bit.
 - `results/`: curated, committed figures/logs for reports and the website. `outputs/`: new run directories (gitignored). Never write run output to the repo root.
 
+## Dashboard
+- `frontend/` is Vite + React + TS (no chart library; charts are hand-written SVG). Data comes from `scripts/build_dashboard_data.py`, which parses `results/`; `frontend/public/{data,figures}` are generated and gitignored.
+- Check: `uv run python scripts/build_dashboard_data.py && cd frontend && npm run build`. CI (`.github/workflows/ci.yml`) runs both Python and frontend jobs; `pages.yml` deploys `main` to GitHub Pages with `VITE_BASE=/<repo>/`.
+- Colours: ERM blue, IRM orange, IRM-Games aqua (validated categorical slots 1-3, light and dark). Keep a method's colour fixed across every chart.
+
 ## Gotchas
 - Refactors must keep `tests/test_regression_legacy.py` passing. Numerical changes (even "bug fixes") need an explicit decision from the user and re-baselined results.
 - Reproducibility: pass explicit `np.random.RandomState`; don't use the global `np.random`. Random draw order matters (W is drawn before V; methods consume the stream in a fixed order).
