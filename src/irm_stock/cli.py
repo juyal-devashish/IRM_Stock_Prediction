@@ -134,6 +134,21 @@ def build_parser() -> argparse.ArgumentParser:
     syn.add_argument("--seed", type=int, default=0)
     syn.add_argument("--output-dir", type=Path, default=Path("outputs"))
 
+    wf = sub.add_parser(
+        "walk-forward",
+        help="Score frozen (pre-2024) models on all data since 2024; append to a history.",
+    )
+    wf.add_argument("--tickers", default="SPY,AAPL,WMT,VOO", help="Comma-separated tickers.")
+    wf.add_argument(
+        "--data-dir",
+        type=Path,
+        default=Path("data"),
+        help="Holds models/, cache/ and history.json (the `data` branch in CI).",
+    )
+    wf.add_argument("--window", type=int, default=10)
+    wf.add_argument("--seed", type=int, default=0)
+    wf.add_argument("--retrain", action="store_true", help="Retrain even if saved models exist.")
+
     srv = sub.add_parser("serve", help="Run the demo API server (needs the api extra).")
     srv.add_argument("--host", default="127.0.0.1")
     srv.add_argument("--port", type=int, default=8000)
@@ -209,6 +224,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             configs=configs, n_reps=args.n_reps, n_iterations=args.n_iterations, seed=args.seed
         )
         run_dir = save_synthetic_result(run_synthetic(config), config, args.output_dir)
+
+    elif args.command == "walk-forward":
+        import os
+
+        from irm_stock.pipeline.walk_forward import run_walk_forward
+
+        os.environ.setdefault("IRM_STOCK_CACHE_DIR", str(args.data_dir / "cache"))
+        snap = run_walk_forward(
+            [t for t in args.tickers.split(",") if t.strip()],
+            args.data_dir,
+            window=args.window,
+            seed=args.seed,
+            retrain=args.retrain,
+        )
+        for ticker, res in snap["tickers"].items():
+            v = res["variants"]
+            logger.info(
+                "%s (%d days to %s, regime %s/%s): flipped %s | no shortcut %s | up-days %.1f%%",
+                ticker,
+                res["n_days"],
+                res["as_of"],
+                res["regime"]["trend"],
+                res["regime"]["volatility"],
+                ", ".join(f"{m} {a:.1%}" for m, a in v["shortcut_flipped"].items()),
+                ", ".join(f"{m} {a:.1%}" for m, a in v["no_shortcut"].items()),
+                100 * res["base_rate"],
+            )
+        for ticker, err in snap["errors"].items():
+            logger.error("%s failed: %s", ticker, err)
+        return 0
 
     elif args.command == "serve":
         try:

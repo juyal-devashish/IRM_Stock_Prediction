@@ -1,16 +1,19 @@
 import { useMemo, useState } from "react";
 import { DropChart } from "./components/DropChart";
+import { Live } from "./components/Live";
+import { Lab } from "./lab/Lab";
 import { ResultsTable } from "./components/ResultsTable";
 import { Shortcut } from "./components/Shortcut";
 import { pct } from "./format";
-import { useResults, useTheme } from "./hooks";
+import { useLive, useResults, useTheme } from "./hooks";
 import { METHOD_INFO, METHOD_ORDER } from "./methods";
-import type { Results } from "./types";
+import type { LiveSnapshot, Results } from "./types";
 
 const REPO = "https://github.com/juyal-devashish/IRM_Stock_Prediction";
 
 export default function App() {
   const { data, error } = useResults();
+  const live = useLive();
   const [theme, toggleTheme] = useTheme();
 
   return (
@@ -18,7 +21,9 @@ export default function App() {
       <header className="topbar">
         <a className="brand" href="#top">IRM Stock Prediction</a>
         <nav aria-label="Primary">
+          <a href="#lab">Lab</a>
           <a href="#results">Results</a>
+          <a href="#live">Since 2024</a>
           <a href="#figures">Figures</a>
           <a href="#run">Run it</a>
           <a href={REPO}>Source</a>
@@ -35,7 +40,7 @@ export default function App() {
           </p>
         )}
         {!data && !error && <p className="notice">Loading results…</p>}
-        {data && <Dashboard data={data} />}
+        {data && <Dashboard data={data} live={live} theme={theme} />}
       </main>
       <footer>
         <p>
@@ -48,7 +53,7 @@ export default function App() {
   );
 }
 
-function Dashboard({ data }: { data: Results }) {
+function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] | null; theme: string }) {
   const [benchId, setBenchId] = useState("time-split");
   const bench = data.benchmarks.find((b) => b.id === benchId) ?? data.benchmarks[0];
   const [runId, setRunId] = useState<string | null>(null);
@@ -113,6 +118,8 @@ function Dashboard({ data }: { data: Results }) {
         </p>
       </section>
 
+      <Lab theme={theme} />
+
       <section id="results" aria-labelledby="h-why">
         <h2 id="h-why">What changes between training and test</h2>
         <div className="two-col">
@@ -149,6 +156,8 @@ function Dashboard({ data }: { data: Results }) {
           <p className="fine">The saved IRM-Games result for ColoredMNIST has only 2 restarts, ERM and IRM have 10.</p>
         )}
       </section>
+
+      {live && <Live history={live} />}
 
       <section id="figures" aria-labelledby="h-fig">
         <h2 id="h-fig">Figures from the report</h2>

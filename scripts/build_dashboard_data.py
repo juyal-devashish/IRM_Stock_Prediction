@@ -139,7 +139,7 @@ FIGURES = [
 ]
 
 
-def main() -> None:
+def main(live: Path | None = None) -> None:
     benchmarks = [
         {
             "id": "colored-mnist",
@@ -171,9 +171,16 @@ def main() -> None:
 
     payload = {"benchmarks": benchmarks, "figures": figures}
     (OUT / "data" / "results.json").write_text(json.dumps(payload, indent=2) + "\n")
+    if live is not None:
+        # For local development: copy a walk-forward history (CI fetches it from the data branch).
+        shutil.copyfile(live, OUT / "data" / "live.json")
     n = sum(len(b["runs"]) for b in benchmarks)
     print(f"Wrote {n} runs and {len(figures)} figures to {OUT.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--live", type=Path, help="Walk-forward history.json to include.")
+    main(parser.parse_args().live)

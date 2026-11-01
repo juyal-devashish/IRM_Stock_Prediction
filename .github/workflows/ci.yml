@@ -43,5 +43,8 @@ jobs:
         run: uv run python scripts/build_dashboard_data.py
       - run: npm ci
         working-directory: frontend
+      - name: Parity tests (TypeScript lab vs Python core)
+        run: npm test
+        working-directory: frontend
       - run: npm run build
         working-directory: frontend
