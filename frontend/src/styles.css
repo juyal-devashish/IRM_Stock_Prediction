@@ -151,12 +151,29 @@ tr.group-start th, tr.group-start td { border-top: 1px solid var(--rule); }
 td small { color: var(--muted); font-size: 0.85em; }
 .fine { margin-top: 0.75rem; font-size: 0.9rem; color: var(--ink-2); }
 
-/* Gallery */
-.gallery { display: grid; gap: 1.5rem; }
-@media (min-width: 44rem) { .gallery { grid-template-columns: repeat(2, 1fr); } .gallery figure:first-child { grid-column: 1 / -1; } }
+/* Figures carousel */
 figure { margin: 0; }
-figure a { display: block; background: #fff; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
-figure img { display: block; width: 100%; height: auto; }
+.carousel { position: relative; }
+.carousel-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 10px; border: 1px solid var(--rule); background: #fff; outline: none; }
+.carousel-track::-webkit-scrollbar { display: none; }
+.carousel-track:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.carousel-slide { flex: 0 0 100%; scroll-snap-align: center; display: grid; place-items: center; padding: 0.75rem; }
+.carousel-slide a { display: contents; }
+.carousel-slide img { width: 100%; height: auto; max-height: min(34rem, 70vh); object-fit: contain; }
+.carousel-bar { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 0.75rem; margin-top: 0.75rem; }
+.carousel-caption { margin: 0; color: var(--ink-2); font-size: 0.95rem; max-width: none; text-align: center; padding-top: 0.3rem; }
+.carousel-count { display: block; color: var(--ink); font-weight: 650; font-size: 0.85rem; }
+.carousel-dots { display: flex; justify-content: center; gap: 0.25rem; margin-top: 0.5rem; }
+.carousel-dots .dot { width: 1.75rem; height: 1.75rem; border: 0; background: none; padding: 0; cursor: pointer; display: grid; place-items: center; }
+.carousel-dots .dot::before { content: ""; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--axis); transition: transform 0.15s; }
+.carousel-dots .dot[aria-current="true"]::before { background: var(--ink); transform: scale(1.25); }
+@media (max-width: 36rem) {
+  .carousel-slide { padding: 0.4rem; }
+  .carousel-bar { grid-template-columns: 1fr 1fr; }
+  .carousel-caption { grid-column: 1 / -1; order: -1; }
+  .carousel-bar .chip:first-child { justify-self: start; }
+  .carousel-bar .chip:last-child { justify-self: end; }
+}
 figcaption { margin-top: 0.5rem; font-size: 0.9rem; color: var(--ink-2); max-width: 36rem; }
 
 pre { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem; overflow-x: auto; margin: 0 0 1rem; line-height: 1.6; }
