@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Carousel } from "./components/Carousel";
 import { DropChart } from "./components/DropChart";
 import { Live } from "./components/Live";
 import { Lab } from "./lab/Lab";
@@ -161,16 +162,7 @@ function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] 
 
       <section id="figures" aria-labelledby="h-fig">
         <h2 id="h-fig">Figures from the report</h2>
-        <div className="gallery">
-          {data.figures.map((f) => (
-            <figure key={f.file}>
-              <a href={`${import.meta.env.BASE_URL}${f.file}`}>
-                <img src={`${import.meta.env.BASE_URL}${f.file}`} alt={f.caption} loading="lazy" />
-              </a>
-              <figcaption>{f.caption}</figcaption>
-            </figure>
-          ))}
-        </div>
+        <Carousel figures={data.figures} />
       </section>
 
       <section id="run" aria-labelledby="h-run">
