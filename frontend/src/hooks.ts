@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Results } from "./types";
+import type { LiveSnapshot, Results } from "./types";
 
 export function useResults() {
   const [data, setData] = useState<Results | null>(null);
@@ -49,4 +49,16 @@ export function useTheme() {
     }
   };
   return [theme, toggle] as const;
+}
+
+/** Weekly walk-forward history; null when the file is absent (section hidden). */
+export function useLive() {
+  const [history, setHistory] = useState<LiveSnapshot[] | null>(null);
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}data/live.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<LiveSnapshot[]>) : null))
+      .then((h) => setHistory(h && h.length ? h : null))
+      .catch(() => setHistory(null));
+  }, []);
+  return history;
 }

@@ -127,6 +127,7 @@ def evaluate(
         X, y = make_finance_environment(prices, spec.window, e=e, seed=spec.seed, label_noise=0.0)
         X, y = X[mask], y[mask]
         out["base_rate"] = float(y.mean())
+        labels = y  # identical across variants (no label noise)
         out["variants"][variant] = {
             m: float(mean_accuracy(logits(W, V, X), y)) for m, (W, V) in models.items()
         }
@@ -136,7 +137,11 @@ def evaluate(
 
     for month in sorted(set(months)):
         sel = np.asarray(months == month)
-        row: dict[str, Any] = {"month": month, "n_days": int(sel.sum())}
+        row: dict[str, Any] = {
+            "month": month,
+            "n_days": int(sel.sum()),
+            "base_rate": float(labels[sel].mean()),
+        }
         for variant, correct in per_variant_correct.items():
             row[variant] = {m: float(c[sel].mean()) for m, c in correct.items()}
         out["monthly"].append(row)

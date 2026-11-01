@@ -55,6 +55,8 @@ def test_run_ticker_trains_saves_and_reuses(tmp_path, fake_prices, series, small
         assert set(accs) == {"erm", "irm", "irm_games"}
         assert all(0.0 <= a <= 1.0 for a in accs.values())
     assert sum(m["n_days"] for m in first["monthly"]) == first["n_days"]
+    weighted = sum(m["base_rate"] * m["n_days"] for m in first["monthly"]) / first["n_days"]
+    assert weighted == pytest.approx(first["base_rate"])
     assert first["regime"]["trend"] in {"bull", "bear", "side", "unknown"}
     assert first["regime"]["volatility"] in {"low", "mid", "high"}
 

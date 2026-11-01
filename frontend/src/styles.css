@@ -169,3 +169,21 @@ footer { padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var
   html { scroll-behavior: auto; }
   * { transition: none !important; animation: none !important; }
 }
+
+/* Live (since 2024) */
+.regime { margin: 0.25rem 0 0.75rem; font-weight: 560; }
+.line-chart { width: 100%; }
+.line-chart svg { display: block; overflow: visible; outline: none; }
+.line-chart svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
+.line-chart .grid { stroke: var(--grid); stroke-width: 1; }
+.line-chart .chance { stroke: var(--chance); stroke-width: 1; stroke-dasharray: 5 4; opacity: 0.7; }
+.line-chart .tick { fill: var(--muted); font-size: 12px; }
+.line-chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.line-chart .baseline-line { fill: none; stroke: var(--axis); stroke-width: 7; stroke-linejoin: round; stroke-linecap: round; }
+.line-chart .crosshair line { stroke: var(--ink-2); stroke-width: 1; }
+.line-chart .crosshair circle { stroke: var(--surface); stroke-width: 2; }
+.legend { list-style: none; margin: 0 0 0.5rem; padding: 0 0.5rem; display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; font-size: 0.875rem; color: var(--ink-2); }
+.legend li { display: inline-flex; align-items: center; }
+.baseline-swatch { background: var(--axis); height: 0.5rem; width: 1.1rem; border-radius: 4px; }
+.line-chart .readout { padding: 0.25rem 0.5rem 0.25rem; margin: 0; font-size: 0.875rem; color: var(--ink-2); }
+#live .table-wrap { margin-top: 1.25rem; }
