@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -82,7 +82,3 @@ class MethodSummary:
             "test_mean": self.test_mean,
             "test_std": self.test_std,
         }
-
-
-def config_to_dict(config: Any) -> dict[str, Any]:
-    return asdict(config)

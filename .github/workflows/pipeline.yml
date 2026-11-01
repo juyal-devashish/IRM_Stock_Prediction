@@ -18,7 +18,7 @@ jobs:
   walk-forward:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Does the data branch exist?
         id: branch
@@ -26,7 +26,7 @@ jobs:
 
       - name: Check out data branch
         if: steps.branch.outputs.exists != '0'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: data
           path: data
@@ -41,7 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
       - run: uv sync

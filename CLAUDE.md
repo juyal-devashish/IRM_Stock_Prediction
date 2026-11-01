@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Research code comparing ERM, IRMv1 and IRM-Games (pure NumPy, hand-written gradients) on finance, ColoredMNIST and synthetic-SEM tasks. A FastAPI demo backend is planned/in progress (`src/irm_stock/api/`); a separate frontend will consume it.
+Research code comparing ERM, IRMv1 and IRM-Games (pure NumPy, hand-written gradients) on finance, ColoredMNIST and synthetic-SEM tasks. The public site is the static dashboard in `frontend/` (GitHub Pages, no server); `src/irm_stock/api/` is a FastAPI backend for local or future hosted use and is not deployed.
 
 ## Commands (uv; Python 3.12)
 - Setup: `uv sync --extra api` (add `--extra mnist` for ColoredMNIST; pulls torch via torchvision)

@@ -18,7 +18,6 @@ dist/
 
 # Run outputs (curated results live in results/)
 outputs/
-.cache/
 
 # Claude Code personal files
 CLAUDE.local.md
