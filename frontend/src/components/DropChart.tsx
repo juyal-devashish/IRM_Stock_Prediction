@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { pct, points } from "../format";
 import { useWidth } from "../hooks";
-import { METHOD_INFO, METHOD_ORDER } from "../methods";
+import { CHART_METHODS, METHOD_INFO } from "../methods";
 import type { MethodKey, Run } from "../types";
 
 const ROW_H = 76;
@@ -17,7 +17,7 @@ export function DropChart({ run }: { run: Run }) {
   const w = Math.max(width, 300);
   const innerW = w - PAD_X * 2;
   const x = (v: number) => PAD_X + v * innerW;
-  const h = TOP + ROW_H * METHOD_ORDER.length + BOTTOM;
+  const h = TOP + ROW_H * CHART_METHODS.length + BOTTOM;
   const activeStats = active ? run.methods[active] : null;
 
   return (
@@ -36,7 +36,7 @@ export function DropChart({ run }: { run: Run }) {
           Coin flip
         </text>
 
-        {METHOD_ORDER.map((key, i) => {
+        {CHART_METHODS.map((key, i) => {
           const s = run.methods[key];
           const y = TOP + ROW_H * i + ROW_H / 2 + 8;
           const close = Math.abs(x(s.train_mean) - x(s.test_mean)) < 84;

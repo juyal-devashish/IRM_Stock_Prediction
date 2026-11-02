@@ -1,7 +1,7 @@
 """Build the dashboard's data from the curated files in results/.
 
-Writes frontend/public/data/results.json and copies selected figures to
-frontend/public/figures/. Run from the repo root:
+Writes frontend/public/data/results.json and draws the method figures (ERM and IRM,
+from the same numbers as the table) into frontend/public/figures/. Run from the repo root:
 
     uv run python scripts/build_dashboard_data.py
 
@@ -140,42 +140,143 @@ def colored_mnist_run() -> dict:
     }
 
 
-FIGURES = [
+#: Methods drawn in figures, in the site's colours (IRM-Games is in the tables only).
+CHART_METHODS = {"erm": ("ERM", "#2a78d6"), "irm": ("IRM", "#eb6834")}
+INK, INK_2, GRID = "#16243a", "#4a5668", "#dfe4e1"
+SYNTHETIC_RESULTS = ROOT / "results" / "runs" / "synthetic" / "figure4.json"
+
+#: (benchmark id, run id, output file, caption): method figures drawn from the
+#: same numbers as the dashboard's table, so they always agree with it.
+METHOD_FIGURES = [
     (
-        "synthetic/figure4_irm_games.png",
-        "synthetic-figure4.png",
-        "Synthetic causal-error benchmark: ERM vs IRM Games vs IRM across eight settings",
-    ),
-    (
-        "finance/combined_finance_2_trend_regimes_spy.png",
+        "market-regimes",
+        "market-regimes-spy",
         "finance-trend-regimes-spy.png",
-        "Market regimes on SPY: train and test accuracy, and the gap between them",
+        "Market regimes on the S&P 500 (SPY): train and test accuracy, and the gap between them",
     ),
     (
-        "finance/combined_finance_3_volatility_wmt.png",
+        "volatility",
+        "volatility-wmt",
         "finance-volatility-wmt.png",
-        "Volatility regimes on WMT: train and test accuracy, and the gap between them. "
-        "From a later run than the WMT row in the table, so the numbers differ, "
-        "most for IRM-Games",
+        "Volatility regimes on WMT: train and test accuracy, and the gap between them",
     ),
     (
-        "finance/combined_finance_1_time_spurious_aapl.png",
+        "time-split",
+        "time-split-aapl",
         "finance-time-split-aapl.png",
-        "Time split on AAPL: train and test accuracy, and the gap between them. "
-        "From a later run than the AAPL row in the table, so the numbers differ, "
-        "most for IRM-Games",
+        "Time split on AAPL: train and test accuracy, and the gap between them",
     ),
     (
-        "colored_mnist/erm_irm_irmgames_comparison.png",
+        "colored-mnist",
+        "colored-mnist",
         "colored-mnist.png",
-        "ColoredMNIST: train and test accuracy for ERM, IRM and IRM-Games",
-    ),
-    (
-        "colored_mnist/colored_mnist_visualization.png",
-        "colored-mnist-samples.png",
-        "ColoredMNIST digits: colour tracks the label in training and flips at test time",
+        "ColoredMNIST: train and test accuracy for ERM and IRM",
     ),
 ]
+
+
+def draw_method_figure(methods: dict, path: Path) -> None:
+    """Train vs test accuracy (with a coin-flip line) and the train-test gap."""
+    from matplotlib.figure import Figure
+
+    keys = list(CHART_METHODS)
+    labels = [CHART_METHODS[k][0] for k in keys]
+    colors = [CHART_METHODS[k][1] for k in keys]
+    x = np.arange(len(keys))
+    w = 0.36
+    fig = Figure(figsize=(11, 4.2))
+    ax1, ax2 = fig.subplots(1, 2, gridspec_kw={"width_ratios": [1.6, 1]})
+    for ax in (ax1, ax2):
+        ax.spines[["top", "right"]].set_visible(False)
+        ax.spines[["left", "bottom"]].set_color(INK_2)
+        ax.tick_params(colors=INK_2)
+        ax.grid(axis="y", color=GRID, linewidth=0.8)
+        ax.set_axisbelow(True)
+    tr = [methods[k]["train_mean"] for k in keys]
+    te = [methods[k]["test_mean"] for k in keys]
+    err = {"ecolor": INK_2, "capsize": 3}
+    ax1.bar(
+        x - w / 2,
+        tr,
+        w,
+        color=colors,
+        alpha=0.38,
+        yerr=[methods[k]["train_std"] for k in keys],
+        **err,
+    )
+    ax1.bar(x + w / 2, te, w, color=colors, yerr=[methods[k]["test_std"] for k in keys], **err)
+    for xi, k in enumerate(keys):
+        m = methods[k]
+        # Labels sit above each bar's error bar.
+        y_tr = m["train_mean"] + m["train_std"] + 0.02
+        y_te = m["test_mean"] + m["test_std"] + 0.02
+        ax1.text(xi - w / 2, y_tr, f"{m['train_mean']:.0%}", ha="center", color=INK_2, fontsize=9)
+        ax1.text(
+            xi + w / 2,
+            y_te,
+            f"{m['test_mean']:.0%}",
+            ha="center",
+            color=INK,
+            fontsize=9,
+            weight="bold",
+        )
+    ax1.axhline(0.5, color=INK, linestyle=(0, (5, 4)), linewidth=1)
+    ax1.text((len(keys) - 1) / 2, 0.515, "coin flip", ha="center", color=INK_2, fontsize=9)
+    ax1.set_xticks(x, [f"{lab}\ntrain   test" for lab in labels], color=INK)
+    ax1.set_ylim(0, 1.05)
+    ax1.set_yticks([0, 0.25, 0.5, 0.75, 1], ["0%", "25%", "50%", "75%", "100%"])
+    ax1.set_title("Accuracy", color=INK, loc="left", fontsize=11)
+    gaps = [a - b for a, b in zip(tr, te, strict=True)]
+    ax2.bar(x, gaps, 0.55, color=colors)
+    for xi, g in enumerate(gaps):
+        pts = round(100 * g) or 0  # avoid "-0"
+        ax2.text(xi, max(g, 0) + 0.015, f"{pts} pts", ha="center", color=INK, fontsize=9)
+    ax2.axhline(0, color=INK_2, linewidth=0.8)
+    ax2.set_xticks(x, labels, color=INK)
+    ax2.set_title("Train minus test (points)", color=INK, loc="left", fontsize=11)
+    ax2.yaxis.set_major_formatter(lambda v, _: f"{100 * v:.0f}")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150, facecolor="white")
+
+
+def build_figures(benchmarks: list[dict]) -> list[dict]:
+    from irm_stock.plotting import plot_synthetic_figure
+
+    dest = OUT / "figures"
+    shutil.rmtree(dest, ignore_errors=True)  # no stale images from earlier builds
+    dest.mkdir(parents=True)
+    runs = {r["id"]: r for b in benchmarks for r in b["runs"]}
+    figures = []
+    if SYNTHETIC_RESULTS.exists():
+        results = json.loads(SYNTHETIC_RESULTS.read_text())["results"]
+        plot_synthetic_figure(
+            results,
+            dest / "synthetic-figure4.png",
+            methods=list(CHART_METHODS),
+            palette={k: c for k, (_, c) in CHART_METHODS.items()},
+            dpi=150,
+        )
+        figures.append(
+            {
+                "file": "figures/synthetic-figure4.png",
+                "caption": "Synthetic causal-error benchmark: ERM vs IRM across eight settings",
+            }
+        )
+    for _bid, run_id, name, caption in METHOD_FIGURES:
+        draw_method_figure(runs[run_id]["methods"], dest / name)
+        figures.append({"file": f"figures/{name}", "caption": caption})
+    shutil.copyfile(
+        FIGS / "colored_mnist" / "colored_mnist_visualization.png",
+        dest / "colored-mnist-samples.png",
+    )
+    figures.append(
+        {
+            "file": "figures/colored-mnist-samples.png",
+            "caption": "ColoredMNIST digits: colour tracks the label in training "
+            "and flips at test time",
+        }
+    )
+    return figures
 
 
 def main(live: Path | None = None) -> None:
@@ -208,10 +309,7 @@ def main(live: Path | None = None) -> None:
 
     OUT.joinpath("data").mkdir(parents=True, exist_ok=True)
     OUT.joinpath("figures").mkdir(parents=True, exist_ok=True)
-    figures = []
-    for src, dest, caption in FIGURES:
-        shutil.copyfile(FIGS / src, OUT / "figures" / dest)
-        figures.append({"file": f"figures/{dest}", "caption": caption})
+    figures = build_figures(benchmarks)
 
     payload = {"benchmarks": benchmarks, "figures": figures}
     (OUT / "data" / "results.json").write_text(json.dumps(payload, indent=2) + "\n")

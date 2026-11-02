@@ -2,12 +2,12 @@ import { useMemo, useState } from "react";
 import { Carousel } from "./components/Carousel";
 import { DropChart } from "./components/DropChart";
 import { Live } from "./components/Live";
+import { MathSection } from "./components/MathSection";
 import { Lab } from "./lab/Lab";
 import { ResultsTable } from "./components/ResultsTable";
 import { Shortcut } from "./components/Shortcut";
 import { pct } from "./format";
 import { useLive, useResults, useTheme } from "./hooks";
-import { METHOD_INFO, METHOD_ORDER } from "./methods";
 import type { LiveSnapshot, Results, Run } from "./types";
 
 const REPO = "https://github.com/juyal-devashish/IRM_Stock_Prediction";
@@ -152,18 +152,7 @@ function Dashboard({ data, live, theme }: { data: Results; live: LiveSnapshot[] 
           </div>
         </div>
 
-        <h3 className="spaced">The three methods</h3>
-        <dl className="methods">
-          {METHOD_ORDER.map((k) => (
-            <div key={k}>
-              <dt>
-                <span className="swatch" style={{ background: `var(--m-${k})` }} />
-                {METHOD_INFO[k].label}
-              </dt>
-              <dd>{METHOD_INFO[k].blurb}</dd>
-            </div>
-          ))}
-        </dl>
+        <MathSection />
 
         <h3 className="spaced">Numbers for {bench.label}</h3>
         <ResultsTable benchmark={bench} />

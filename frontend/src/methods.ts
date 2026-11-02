@@ -2,6 +2,9 @@ import type { MethodKey } from "./types";
 
 export const METHOD_ORDER: MethodKey[] = ["erm", "irm", "irm_games"];
 
+/** Methods drawn in charts. IRM-Games appears in tables only. */
+export const CHART_METHODS: MethodKey[] = ["erm", "irm"];
+
 export const METHOD_INFO: Record<MethodKey, { label: string; blurb: string }> = {
   erm: {
     label: "ERM",
