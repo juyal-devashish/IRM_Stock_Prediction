@@ -3,14 +3,15 @@ import { pct } from "../format";
 import { useWidth } from "../hooks";
 import { METHOD_INFO } from "../methods";
 import type { MethodKey } from "../types";
-import { type Env, ErmTrainer, IrmGamesTrainer, IrmTrainer, type Trainer } from "./methods";
+import { type Env, ErmTrainer, IrmTrainer, type Trainer } from "./methods";
+import { Tex } from "../components/Tex";
+import { CHART_METHODS } from "../methods";
 import { mat, meanAccuracy } from "./nn";
 import { makeToyEnv, mulberry32, withShortcutAgreement } from "./toy";
 
 // Settings chosen so the effect is visible in a few seconds (see PR #4 notes).
 const BASE = { hidden: 16, lr: 0.02, l2: 1e-3 };
 const IRM = { penaltyWeight: 1e4, annealIters: 100 };
-const GAMES = { batchSize: 64, warmStart: false };
 const N_TRAIN = 500;
 const N_TEST = 1000;
 const MAX_ROUNDS = 1500;
@@ -33,17 +34,12 @@ function buildWorld(seed: number, agree: [number, number]): World {
   const train = [makeToyEnv(N_TRAIN, agree[0], rand), makeToyEnv(N_TRAIN, agree[1], rand)];
   const testBase = makeToyEnv(N_TEST, 1, rand);
   const flips = Float64Array.from({ length: N_TEST }, rand);
-  const sampler = (n: number, size: number) => Int32Array.from({ length: size }, () => Math.floor(rand() * n));
   return {
     train,
     testBase,
     flips,
     canonical: withShortcutAgreement(testBase, flips, CANONICAL_AGREE),
-    trainers: [
-      new ErmTrainer(train, BASE, rand),
-      new IrmTrainer(train, { ...BASE, ...IRM }, rand),
-      new IrmGamesTrainer(train, { ...BASE, ...GAMES }, rand, sampler),
-    ],
+    trainers: [new ErmTrainer(train, BASE, rand), new IrmTrainer(train, { ...BASE, ...IRM }, rand)],
   };
 }
 
@@ -111,10 +107,7 @@ export function Lab({ theme }: { theme: string }) {
     (rounds: number) => {
       const w = world.current;
       for (let r = 0; r < rounds && round.current < MAX_ROUNDS; r++) {
-        for (const t of w.trainers) {
-          const turns = t instanceof IrmGamesTrainer ? w.train.length : 1;
-          for (let k = 0; k < turns; k++) t.step();
-        }
+        for (const t of w.trainers) t.step();
         round.current++;
       }
       record();
@@ -151,6 +144,20 @@ export function Lab({ theme }: { theme: string }) {
         right about 75% of the time in every environment. The shortcut is right {pct(agree[0], 0)} and{" "}
         {pct(agree[1], 0)} of the time in the two training environments, so it looks better than the signal.
       </p>
+
+      <div className="math-block lab-math">
+        <Tex display>
+          {"x_{\\text{signal}} = (2y - 1) + \\varepsilon, \\quad \\varepsilon \\sim \\mathcal{N}(0, 1.5^2) \\qquad x_{\\text{shortcut}} = (2\\tilde y - 1) + \\eta, \\quad \\eta \\sim \\mathcal{N}(0, 0.1^2)"}
+        </Tex>
+        <p className="fine">
+          <Tex>{"\\tilde y = y"}</Tex> with probability <Tex>{"a_e"}</Tex> and <Tex>{"1 - y"}</Tex> otherwise. On its
+          own the signal is right <Tex>{"\\Phi(1/1.5) \\approx 75\\%"}</Tex> of the time. "Uses the shortcut" is
+          the shortcut's share of the model's average input sensitivity, with each feature scaled by its spread:
+        </p>
+        <Tex display>
+          {"\\dfrac{\\overline{|\\partial f / \\partial x_{\\text{sc}}|}\\,\\sigma_{\\text{sc}}}{\\overline{|\\partial f / \\partial x_{\\text{sig}}|}\\,\\sigma_{\\text{sig}} + \\overline{|\\partial f / \\partial x_{\\text{sc}}|}\\,\\sigma_{\\text{sc}}}"}
+        </Tex>
+      </div>
 
       <div className="lab-controls">
         <button
@@ -241,9 +248,6 @@ export function Lab({ theme }: { theme: string }) {
         <div className="panel">
           <h3 className="chart-title">Test accuracy while training (shortcut right {pct(CANONICAL_AGREE, 0)})</h3>
           <CurveChart history={history.current} />
-          <p className="fine chart-note">
-            IRM-Games zig-zags because its two players keep reacting to each other's moves.
-          </p>
         </div>
         <div className="panel">
           <h3 className="chart-title">Test accuracy as the shortcut changes (current models)</h3>
@@ -350,21 +354,11 @@ function BoundaryPanel({
   }, [trainer, grid, testEnv, cssW, cssH, theme, tick]);
 
   const info = METHOD_INFO[trainer.kind];
-  const games = trainer instanceof IrmGamesTrainer ? trainer : null;
   return (
     <figure className="boundary" style={{ ["--m" as string]: `var(--m-${trainer.kind})` }}>
       <figcaption>
         <span className="swatch" style={{ background: `var(--m-${trainer.kind})` }} />
         <b>{info.label}</b>
-        {games && (
-          <span className="players" aria-label={`Player ${games.turn + 1} moves next`}>
-            {games.Ws.map((_, i) => (
-              <span key={i} className={`player ${games.turn === i ? "is-turn" : ""}`}>
-                Env {i + 1}
-              </span>
-            ))}
-          </span>
-        )}
       </figcaption>
       <div ref={ref} className="canvas-wrap">
         <canvas
@@ -401,7 +395,7 @@ function BoundaryPanel({
 
 // ---------------------------------------------------------------------- charts
 
-const ORDER: MethodKey[] = ["erm", "irm", "irm_games"];
+const ORDER: MethodKey[] = CHART_METHODS;
 const CH = 200;
 const PAD = { l: 40, r: 12, t: 12, b: 26 };
 

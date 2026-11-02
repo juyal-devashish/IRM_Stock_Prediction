@@ -217,7 +217,7 @@ footer { padding-block: 2rem 3rem; border-top: 1px solid var(--rule); color: var
 .lab-sliders b, .lab-dial b { color: var(--ink); }
 input[type="range"] { width: 100%; accent-color: var(--ink); min-height: 1.75rem; }
 .lab-panels { display: grid; gap: 1.25rem; grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 52rem) { .lab-panels { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 44rem) { .lab-panels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .boundary { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 0.75rem; }
 .boundary figcaption { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.5rem; font-size: 1rem; }
 .boundary .swatch { margin-right: 0.1rem; }
@@ -248,3 +248,14 @@ input[type="range"] { width: 100%; accent-color: var(--ink); min-height: 1.75rem
 .chart-note { margin: 0.25rem 0.5rem 0.5rem; }
 .table-note { margin: 0; padding: 0.6rem 1rem 0.8rem; font-size: 0.85rem; color: var(--ink-2); border-top: 1px solid var(--rule); max-width: none; }
 th sup { color: var(--ink-2); margin-left: 0.1rem; }
+
+/* Math */
+.math-block { max-width: 46rem; }
+.tex-display { overflow-x: auto; overflow-y: hidden; padding: 0.15rem 0; margin: 0.4rem 0 0.9rem; }
+.tex-display .katex-display { margin: 0; text-align: left; }
+.tex-display .katex-display > .katex { text-align: left; }
+.katex { font-size: 1.08em; }
+.methods-math { grid-template-columns: minmax(0, 1fr) !important; gap: 1.5rem; max-width: 46rem; }
+.methods-math dd { font-size: 1rem; }
+.lab-math { margin: 0.5rem 0 0.25rem; }
+.lab-math .tex-display { margin-bottom: 0.5rem; }

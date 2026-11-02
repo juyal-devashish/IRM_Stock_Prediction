@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { pct } from "../format";
 import { useWidth } from "../hooks";
-import { METHOD_INFO, METHOD_ORDER } from "../methods";
+import { Tex } from "./Tex";
+import { CHART_METHODS, METHOD_INFO, METHOD_ORDER } from "../methods";
 import type { LiveSnapshot, LiveTicker, Variant } from "../types";
 
 const VARIANTS: { key: Variant; label: string; note: string }[] = [
@@ -67,9 +68,13 @@ export function Live({ history }: { history: LiveSnapshot[] }) {
         <MonthlyChart data={t} variant={variant} />
       </div>
       <p className="reading">
-        {v.note} IRM and IRM-Games mostly sit on the "always up" line: they predict "up" almost every day, so their
-        lines often overlap. They ignore the shortcut, but they have no edge over always predicting up. This is not a
-        trading signal.
+        {v.note} IRM mostly sits on the "always up" line: it predicts "up" almost every day. It ignores the shortcut,
+        but it has no edge over always predicting up. This is not a trading signal. IRM-Games is in the table below.
+      </p>
+
+      <p className="fine">
+        "Shortcut flipped" scores with <Tex>{"a = 0.1"}</Tex>, "No shortcut" with <Tex>{"a = 0.5"}</Tex>. "Always up" is
+        the accuracy of predicting a rise every day: <Tex>{"\\tfrac{1}{n}\\sum_t \\mathbf{1}[\\,r_{t+1} > 0\\,]"}</Tex>.
       </p>
 
       <div className="table-wrap">
@@ -148,7 +153,7 @@ function MonthlyChart({ data, variant }: { data: LiveTicker; variant: Variant })
   return (
     <div ref={ref} className="line-chart">
       <ul className="legend" aria-hidden="true">
-        {METHOD_ORDER.map((m) => (
+        {CHART_METHODS.map((m) => (
           <li key={m}>
             <span className="swatch" style={{ background: `var(--m-${m})` }} />
             {METHOD_INFO[m].label}
@@ -189,13 +194,13 @@ function MonthlyChart({ data, variant }: { data: LiveTicker; variant: Variant })
           ) : null,
         )}
         <path className="baseline-line" d={path(rows.map((r) => r.base_rate))} />
-        {METHOD_ORDER.map((m) => (
+        {CHART_METHODS.map((m) => (
           <path key={m} className="series" style={{ stroke: `var(--m-${m})` }} d={path(rows.map((r) => r[variant][m]))} />
         ))}
         {active && idx !== null && (
           <g className="crosshair">
             <line x1={x(idx)} x2={x(idx)} y1={TOP} y2={H - BOTTOM} />
-            {METHOD_ORDER.map((m) => (
+            {CHART_METHODS.map((m) => (
               <circle key={m} cx={x(idx)} cy={y(active[variant][m])} r={4.5} style={{ fill: `var(--m-${m})` }} />
             ))}
           </g>
@@ -204,7 +209,7 @@ function MonthlyChart({ data, variant }: { data: LiveTicker; variant: Variant })
       <p className="readout" aria-live="polite">
         {active
           ? `${active.month} (${active.n_days} days): always up ${pct(active.base_rate)}, ` +
-            METHOD_ORDER.map((m) => `${METHOD_INFO[m].label} ${pct(active[variant][m])}`).join(", ")
+            CHART_METHODS.map((m) => `${METHOD_INFO[m].label} ${pct(active[variant][m])}`).join(", ")
           : "Hover, or focus the chart and use the arrow keys, to read a month."}
       </p>
     </div>

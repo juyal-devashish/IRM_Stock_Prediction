@@ -6,7 +6,7 @@ thread-safe (e.g. inside the API server) and never opens a window.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -84,12 +84,21 @@ SYNTHETIC_PANEL_ORDER = ["FOU", "FOS", "FEU", "FES", "POU", "POS", "PEU", "PES"]
 
 
 def plot_synthetic_figure(
-    results: Mapping[str, Mapping[str, Mapping[str, list[float]]]], path: str | Path
+    results: Mapping[str, Mapping[str, Mapping[str, list[float]]]],
+    path: str | Path,
+    methods: Sequence[str] | None = None,
+    palette: Mapping[str, str] | None = None,
+    dpi: int = 300,
 ) -> Path:
     """Reproduce Figure 4 of the IRM paper: per config, causal (solid) and
-    non-causal (hatched) weight errors for each method, log scale."""
-    methods = list(SYNTHETIC_COLORS)
-    colors = [SYNTHETIC_COLORS[m] for m in methods]
+    non-causal (hatched) weight errors for each method, log scale.
+
+    ``methods`` picks and orders the methods drawn (default: all three);
+    ``palette`` overrides their colours.
+    """
+    methods = list(methods or SYNTHETIC_COLORS)
+    palette = {**SYNTHETIC_COLORS, **(palette or {})}
+    colors = [palette[m] for m in methods]
     fig = Figure(figsize=(14, 6))
     axes = fig.subplots(2, 4).flatten()
     x = np.arange(len(methods))
@@ -128,10 +137,10 @@ def plot_synthetic_figure(
         ax.set_axisbelow(True)
 
     axes[-1].legend(
-        handles=[Patch(facecolor=SYNTHETIC_COLORS[m], label=SYNTHETIC_LABELS[m]) for m in methods],
+        handles=[Patch(facecolor=palette[m], label=SYNTHETIC_LABELS[m]) for m in methods],
         loc="center",
         frameon=True,
     )
     fig.tight_layout()
-    fig.savefig(path, dpi=300, bbox_inches="tight")
+    fig.savefig(path, dpi=dpi, bbox_inches="tight")
     return Path(path)
